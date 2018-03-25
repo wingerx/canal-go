@@ -1,2 +1,2 @@
-# canal-go
-rewrite alibaba' canal by go
+# 数据传输DRT
+Data Replication Transmission
