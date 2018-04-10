@@ -3,6 +3,7 @@ package driver
 import (
 	"fmt"
 	"strconv"
+	. "github.com/woqutech/drt/tools"
 )
 
 type Result struct {
@@ -31,7 +32,7 @@ func (r *ResultSet) GetString(row, column int) (string, error) {
 	case string:
 		return v, nil
 	case []byte:
-		return unsafeGetString(v), nil
+		return UnsafeGetString(v), nil
 	case int64:
 		return strconv.FormatInt(v, 10), nil
 	case uint64:
@@ -112,7 +113,7 @@ func (p RowData) parseText(fields []*FieldPacket) ([]interface{}, error) {
 	n := 0
 
 	for fieldIdx := range fields {
-		v, isNull, n, err = readLengthEncodedString(p[i:])
+		v, isNull, n, err = ReadLengthEncodedString(p[i:])
 		if err != nil {
 			return nil, err
 		}
@@ -184,56 +185,56 @@ func (p RowData) parseBinary(f []*FieldPacket) ([]interface{}, error) {
 			// Numeric Types
 		case MYSQL_TYPE_TINY:
 			if isUnsigned {
-				b[i] = readBinaryUint8(p[pos : pos+1])
+				b[i] = ReadBinaryUint8(p[pos : pos+1])
 			} else {
-				b[i] = readBinaryInt8(p[pos : pos+1])
+				b[i] = ReadBinaryInt8(p[pos : pos+1])
 			}
 			pos++
 			continue
 
 		case MYSQL_TYPE_SHORT, MYSQL_TYPE_YEAR:
 			if isUnsigned {
-				b[i] = readBinaryUint16(p[pos : pos+2])
+				b[i] = ReadBinaryUint16(p[pos : pos+2])
 			} else {
-				b[i] = readBinaryInt16(p[pos : pos+2])
+				b[i] = ReadBinaryInt16(p[pos : pos+2])
 			}
 			pos += 2
 			continue
 
 		case MYSQL_TYPE_INT24:
 			if isUnsigned {
-				b[i] = readBinaryUint24(p[pos : pos+3])
+				b[i] = ReadBinaryUint24(p[pos : pos+3])
 			} else {
-				b[i] = readBinaryInt24(p[pos : pos+3])
+				b[i] = ReadBinaryInt24(p[pos : pos+3])
 			}
 			pos += 4
 			continue
 
 		case MYSQL_TYPE_LONG:
 			if isUnsigned {
-				b[i] = readBinaryUint32(p[pos : pos+4])
+				b[i] = ReadBinaryUint32(p[pos : pos+4])
 			} else {
-				b[i] = readBinaryInt32(p[pos : pos+4])
+				b[i] = ReadBinaryInt32(p[pos : pos+4])
 			}
 			pos += 4
 			continue
 
 		case MYSQL_TYPE_LONGLONG:
 			if isUnsigned {
-				b[i] = readBinaryUint64(p[pos : pos+8])
+				b[i] = ReadBinaryUint64(p[pos : pos+8])
 			} else {
-				b[i] = readBinaryInt64(p[pos : pos+8])
+				b[i] = ReadBinaryInt64(p[pos : pos+8])
 			}
 			pos += 8
 			continue
 
 		case MYSQL_TYPE_FLOAT:
-			b[i] = readBinaryFloat32(p[pos : pos+4])
+			b[i] = ReadBinaryFloat32(p[pos : pos+4])
 			pos += 4
 			continue
 
 		case MYSQL_TYPE_DOUBLE:
-			b[i] = readBinaryFloat64(p[pos : pos+4])
+			b[i] = ReadBinaryFloat64(p[pos : pos+4])
 			pos += 8
 			continue
 
@@ -242,7 +243,7 @@ func (p RowData) parseBinary(f []*FieldPacket) ([]interface{}, error) {
 			MYSQL_TYPE_BIT, MYSQL_TYPE_ENUM, MYSQL_TYPE_SET, MYSQL_TYPE_TINY_BLOB,
 			MYSQL_TYPE_MEDIUM_BLOB, MYSQL_TYPE_LONG_BLOB, MYSQL_TYPE_BLOB,
 			MYSQL_TYPE_VAR_STRING, MYSQL_TYPE_STRING, MYSQL_TYPE_GEOMETRY:
-			v, isNull, n, err = readLengthEncodedString(p[pos:])
+			v, isNull, n, err = ReadLengthEncodedString(p[pos:])
 			pos += n
 			if err != nil {
 				return nil, err
@@ -257,7 +258,7 @@ func (p RowData) parseBinary(f []*FieldPacket) ([]interface{}, error) {
 			}
 		case MYSQL_TYPE_DATE, MYSQL_TYPE_NEWDATE:
 			var num uint64
-			num, isNull, n = readLengthEncodedInteger(p[pos:])
+			num, isNull, n = ReadLengthEncodedInteger(p[pos:])
 
 			pos = pos + n
 
@@ -266,7 +267,7 @@ func (p RowData) parseBinary(f []*FieldPacket) ([]interface{}, error) {
 				continue
 			}
 
-			b[i], err = formatBinaryDate(int(num), p[pos:])
+			b[i], err = FormatBinaryDate(int(num), p[pos:])
 			pos += int(num)
 
 			if err != nil {
@@ -275,7 +276,7 @@ func (p RowData) parseBinary(f []*FieldPacket) ([]interface{}, error) {
 
 		case MYSQL_TYPE_TIMESTAMP, MYSQL_TYPE_DATETIME:
 			var num uint64
-			num, isNull, n = readLengthEncodedInteger(p[pos:])
+			num, isNull, n = ReadLengthEncodedInteger(p[pos:])
 
 			pos += n
 
@@ -284,7 +285,7 @@ func (p RowData) parseBinary(f []*FieldPacket) ([]interface{}, error) {
 				continue
 			}
 
-			b[i], err = formatBinaryDateTime(int(num), p[pos:])
+			b[i], err = FormatBinaryDateTime(int(num), p[pos:])
 			pos += int(num)
 
 			if err != nil {
@@ -293,7 +294,7 @@ func (p RowData) parseBinary(f []*FieldPacket) ([]interface{}, error) {
 
 		case MYSQL_TYPE_TIME:
 			var num uint64
-			num, isNull, n = readLengthEncodedInteger(p[pos:])
+			num, isNull, n = ReadLengthEncodedInteger(p[pos:])
 
 			pos += n
 
@@ -302,7 +303,7 @@ func (p RowData) parseBinary(f []*FieldPacket) ([]interface{}, error) {
 				continue
 			}
 
-			b[i], err = formatBinaryTime(int(num), p[pos:])
+			b[i], err = FormatBinaryTime(int(num), p[pos:])
 			pos += int(num)
 
 			if err != nil {

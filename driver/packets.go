@@ -5,6 +5,9 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/juju/errors"
+	"strings"
+	"strconv"
+	. "github.com/woqutech/drt/tools"
 )
 
 // |Type			  |Name						   	  |Description
@@ -36,11 +39,11 @@ func (mc *MySQLConnector) handleOKPacket(data []byte) (*Result, error) {
 
 	result := new(Result)
 	// Affected rows [Length Coded Binary]
-	result.AffectedRows, _, n = readLengthEncodedInteger(data[offset:])
+	result.AffectedRows, _, n = ReadLengthEncodedInteger(data[offset:])
 	offset += n
 
 	// Insert id [Length Coded Binary]
-	result.InsertId, _, n = readLengthEncodedInteger(data[offset:])
+	result.InsertId, _, n = ReadLengthEncodedInteger(data[offset:])
 	offset += n
 
 	if mc.capabilities&CLIENT_PROTOCOL_41 > 0 {
@@ -67,6 +70,10 @@ func (mc *MySQLConnector) handleOKPacket(data []byte) (*Result, error) {
 // |}                                                            |
 // |string<EOF>|error_message		|human readable error message|
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_err_packet.html
+func (mc *MySQLConnector) HandleERRPacket(data []byte) error {
+	return mc.handleERRPacket(data)
+}
+
 func (mc *MySQLConnector) handleERRPacket(data []byte) error {
 	offset := 0
 	if data[offset] != ERR_HEADER {
@@ -100,9 +107,10 @@ func (mc *MySQLConnector) handleERRPacket(data []byte) error {
 // |n     |binlog file name (optional)                |
 func (mc *MySQLConnector) WriteBinlogDumpPacket(binlogName string, slaveId, position uint32) error {
 	mc.resetSequence()
-	data := make([]byte, 4+1+4+2+4+len(binlogName))
 
+	data := make([]byte, 4+1+4+2+4+len(binlogName))
 	offset := 4
+
 	data[offset] = COM_BINLOG_DUMP
 	offset++
 
@@ -118,6 +126,50 @@ func (mc *MySQLConnector) WriteBinlogDumpPacket(binlogName string, slaveId, posi
 	copy(data[offset:], binlogName)
 	return mc.writePacket(data[:])
 
+}
+
+func (mc *MySQLConnector) WriteRegisterSlavePacket(slaveId uint32) error {
+	mc.resetSequence()
+	hostname, _ := mc.hostname()
+	port, _ := strconv.Atoi(strings.Split(mc.address, ":")[1])
+
+	data := make([]byte, 4+1+4+1+len(hostname)+1+len(mc.username)+1+len(mc.password)+2+4+4)
+	offset := 4
+
+	data[offset] = COM_REGISTER_SLAVE
+	offset++
+
+	binary.LittleEndian.PutUint32(data[offset:], slaveId)
+	offset += 4
+
+	data[offset] = uint8(len(hostname))
+	offset ++
+
+	n := copy(data[offset:], hostname)
+	offset += n
+
+	data[offset] = uint8(len(mc.username))
+	offset ++
+
+	n = copy(data[offset:], mc.username)
+	offset += n
+
+	data[offset] = uint8(len(mc.password))
+	offset ++
+
+	n = copy(data[offset:], mc.password)
+	offset += n
+
+	binary.LittleEndian.PutUint16(data[offset:], uint16(port))
+	offset = offset + 2
+
+	// Replication rank (not used)
+	binary.LittleEndian.PutUint32(data[offset:], 0)
+	offset = offset + 4
+
+	// master id use 0 here
+	binary.LittleEndian.PutUint32(data[offset:], 0)
+	return nil
 }
 
 // |Type  					   |Name                       |
@@ -141,7 +193,7 @@ func (mc *MySQLConnector) writeAuthPacket() error {
 	capabilities &= mc.capabilities
 
 	// Calculate hash
-	scrambleBuff := scramble41(mc.scramble, []byte(mc.password))
+	scrambleBuff := Scramble41(mc.scramble, []byte(mc.password))
 	// Length: capability (4) + max-packet size (4) + charset (1) + reserved all[0]
 	// (23) + username + 1(0x00) + password + 1(0x00) + 21("mysql_native_password") + 1(0x00)
 	packetLength := 4 + 4 + 1 + 23 + (len(mc.username) + 1) + (len(scrambleBuff) + 1) + 21 + 1
@@ -197,7 +249,7 @@ func (mc *MySQLConnector) writeAuthPacket() error {
 	return mc.writePacket(data)
 }
 
-func (mc *MySQLConnector) writeQueryComPacket(query string) (*Result, error) {
+func (mc *MySQLConnector) writeComQueryPacket(query string) (*Result, error) {
 	err := mc.writeCommandPacket(query, COM_QUERY)
 	if err != nil {
 		mc.close()
@@ -206,7 +258,7 @@ func (mc *MySQLConnector) writeQueryComPacket(query string) (*Result, error) {
 	return mc.readResultSetHeaderPacket(false)
 }
 
-func (mc *MySQLConnector) writeMultiQueryComPacket(query string) ([]*Result, error) {
+func (mc *MySQLConnector) writeMultiComQueriesPacket(query string) ([]*Result, error) {
 	err := mc.writeCommandPacket(query, COM_QUERY)
 	if err != nil {
 		mc.close()
@@ -405,7 +457,7 @@ func (mc *MySQLConnector) readResultset(data []byte, binary bool) (*Result, erro
 		AffectedRows: 0,
 		ResultSet:    &ResultSet{},
 	}
-	columnCount, _, n := readLengthEncodedInteger(data[:])
+	columnCount, _, n := ReadLengthEncodedInteger(data[:])
 
 	if n-len(data) != 0 {
 		return nil, ErrMalformPkt
@@ -456,7 +508,7 @@ func (mc *MySQLConnector) readResultColumns(result *Result) (err error) {
 			return
 		}
 
-		result.FieldNames[unsafeGetString(result.Fields[index].Name)] = index
+		result.FieldNames[UnsafeGetString(result.Fields[index].Name)] = index
 
 		index = index + 1
 	}
@@ -500,7 +552,7 @@ func (mc *MySQLConnector) readResultRows(result *Result, isBinary bool) (err err
 
 type FieldData []byte
 
-//Bytes                      Name
+//EventBody                      Name
 // -----                      ----
 // n (Length Coded String)    catalog
 // n (Length Coded String)    db
@@ -541,42 +593,42 @@ func (p FieldData) readFieldPacket() (f *FieldPacket, err error) {
 	offset := 0
 
 	// Skip catalog (always def)
-	n, err = skipLengthEncodedString(p)
+	n, err = SkipLengthEncodedString(p)
 	if err != nil {
 		return
 	}
 	offset += n
 
 	// Schema
-	f.Schema, _, n, err = readLengthEncodedString(p[offset:])
+	f.Schema, _, n, err = ReadLengthEncodedString(p[offset:])
 	if err != nil {
 		return
 	}
 	offset += n
 
 	// Table
-	f.Table, _, n, err = readLengthEncodedString(p[offset:])
+	f.Table, _, n, err = ReadLengthEncodedString(p[offset:])
 	if err != nil {
 		return
 	}
 	offset += n
 
 	// Org table
-	f.OrgTable, _, n, err = readLengthEncodedString(p[offset:])
+	f.OrgTable, _, n, err = ReadLengthEncodedString(p[offset:])
 	if err != nil {
 		return
 	}
 	offset += n
 
 	// Name
-	f.Name, _, n, err = readLengthEncodedString(p[offset:])
+	f.Name, _, n, err = ReadLengthEncodedString(p[offset:])
 	if err != nil {
 		return
 	}
 	offset += n
 
 	// Org name
-	f.OrgName, _, n, err = readLengthEncodedString(p[offset:])
+	f.OrgName, _, n, err = ReadLengthEncodedString(p[offset:])
 	if err != nil {
 		return
 	}
@@ -614,7 +666,7 @@ func (p FieldData) readFieldPacket() (f *FieldPacket, err error) {
 	if offset < len(p) {
 
 		// Length of default value (lenenc-int)
-		f.DefaultValueLength, _, n = readLengthEncodedInteger(p[offset:])
+		f.DefaultValueLength, _, n = ReadLengthEncodedInteger(p[offset:])
 		offset += n
 
 		if len(p) < (offset + int(f.DefaultValueLength)) {

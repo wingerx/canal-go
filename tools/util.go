@@ -1,21 +1,22 @@
-package driver
+package tools
 
 import (
-	"unsafe"
-	"reflect"
 	"crypto/sha1"
 	"encoding/binary"
 	"io"
 	"fmt"
 	"math"
-	"strings"
+	"reflect"
+	"unsafe"
+	"runtime"
+	"github.com/shopspring/decimal"
 	"strconv"
-	"github.com/juju/errors"
+	"bytes"
 )
 
 // https://dev.mysql.com/doc/internals/en/integer.html#packet-Protocol::LengthEncodedInteger
 // returns the number read, whether the value is NULL and the number of bytes read
-func readLengthEncodedInteger(b []byte) (num uint64, isNull bool, n int) {
+func ReadLengthEncodedInteger(b []byte) (num uint64, isNull bool, n int) {
 	// See issue #349
 	if len(b) == 0 {
 		return 0, true, 1
@@ -59,9 +60,9 @@ func readLengthEncodedInteger(b []byte) (num uint64, isNull bool, n int) {
 // returns the string read as a bytes slice, wheter the value is NULL,
 // the number of bytes read and an error, in case the string is longer than
 // the input slice
-func readLengthEncodedString(b []byte) ([]byte, bool, int, error) {
+func ReadLengthEncodedString(b []byte) ([]byte, bool, int, error) {
 	// Get length
-	num, isNull, n := readLengthEncodedInteger(b)
+	num, isNull, n := ReadLengthEncodedInteger(b)
 	if num < 1 {
 		return b[n:n], isNull, n, nil
 	}
@@ -77,7 +78,7 @@ func readLengthEncodedString(b []byte) ([]byte, bool, int, error) {
 
 // scramble41() returns a scramble buffer based on the following formula:
 // SHA1(password) XOR SHA1(20-byte public seed from server CONCAT SHA1(SHA1(password)))
-func scramble41(scramble, password []byte) []byte {
+func Scramble41(scramble, password []byte) []byte {
 	if len(password) == 0 {
 		return nil
 	}
@@ -106,64 +107,64 @@ func scramble41(scramble, password []byte) []byte {
 	return result
 }
 
-func byteCountFromBitCount(n int) int {
+func ByteCountFromBitCount(n int) int {
 	return (n + 7) / 8
 }
 
-func readBinaryInt8(b []byte) int8 {
+func ReadBinaryInt8(b []byte) int8 {
 	return int8(b[0])
 }
 
-func readBinaryUint8(b []byte) uint8 {
+func ReadBinaryUint8(b []byte) uint8 {
 	return b[0]
 }
 
-func readBinaryInt16(data []byte) int16 {
+func ReadBinaryInt16(data []byte) int16 {
 	return int16(binary.LittleEndian.Uint16(data))
 }
 
-func readBinaryUint16(data []byte) uint16 {
+func ReadBinaryUint16(data []byte) uint16 {
 	return binary.LittleEndian.Uint16(data)
 }
 
-func readBinaryInt24(data []byte) int32 {
-	u32 := uint32(readBinaryUint24(data))
+func ReadBinaryInt24(data []byte) int32 {
+	u32 := uint32(ReadBinaryUint24(data))
 	if u32&0x00800000 != 0 {
 		u32 |= 0xFF000000
 	}
 	return int32(u32)
 }
 
-func readBinaryUint24(data []byte) uint32 {
+func ReadBinaryUint24(data []byte) uint32 {
 	return uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16
 }
 
-func readBinaryInt32(data []byte) int32 {
+func ReadBinaryInt32(data []byte) int32 {
 	return int32(binary.LittleEndian.Uint32(data))
 }
 
-func readBinaryUint32(data []byte) uint32 {
+func ReadBinaryUint32(data []byte) uint32 {
 	return binary.LittleEndian.Uint32(data)
 }
 
-func readBinaryInt64(data []byte) int64 {
+func ReadBinaryInt64(data []byte) int64 {
 	return int64(binary.LittleEndian.Uint64(data))
 }
 
-func readBinaryUint64(data []byte) uint64 {
+func ReadBinaryUint64(data []byte) uint64 {
 	return binary.LittleEndian.Uint64(data)
 }
 
-func readBinaryFloat32(data []byte) float32 {
+func ReadBinaryFloat32(data []byte) float32 {
 	return math.Float32frombits(binary.LittleEndian.Uint32(data))
 }
 
-func readBinaryFloat64(data []byte) float64 {
+func ReadBinaryFloat64(data []byte) float64 {
 	return math.Float64frombits(binary.LittleEndian.Uint64(data))
 }
 
 // little-endian
-func readLittleEndianFixedLengthInteger(buf []byte) uint64 {
+func ReadLittleEndianFixedLengthInteger(buf []byte) uint64 {
 	var num uint64 = 0
 	for i, b := range buf {
 		num |= uint64(b) << (uint(i) * 8)
@@ -172,7 +173,7 @@ func readLittleEndianFixedLengthInteger(buf []byte) uint64 {
 }
 
 // big-endian
-func readBigEndianFixedLengthInteger(buf []byte) uint64 {
+func ReadBigEndianFixedLengthInteger(buf []byte) uint64 {
 	var num uint64 = 0
 	for i, b := range buf {
 		num |= uint64(b) << (uint(len(buf)-i-1) * 8)
@@ -180,27 +181,27 @@ func readBigEndianFixedLengthInteger(buf []byte) uint64 {
 	return num
 }
 
-func putLengthEncodedInteger(n uint64) []byte {
-	switch {
-	case n <= 250:
-		return []byte{byte(n)}
+//func PutLengthEncodedInteger(n uint64) []byte {
+//	switch {
+//	case n <= 250:
+//		return []byte{byte(n)}
+//
+//	case n <= 0xffff:
+//		return []byte{0xfc, byte(n), byte(n >> 8)}
+//
+//	case n <= 0xffffff:
+//		return []byte{0xfd, byte(n), byte(n >> 8), byte(n >> 16)}
+//
+//	case n <= 0xffffffffffffffff:
+//		return []byte{0xfe, byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24),
+//			byte(n >> 32), byte(n >> 40), byte(n >> 48), byte(n >> 56)}
+//	}
+//	return nil
+//}
 
-	case n <= 0xffff:
-		return []byte{0xfc, byte(n), byte(n >> 8)}
-
-	case n <= 0xffffff:
-		return []byte{0xfd, byte(n), byte(n >> 8), byte(n >> 16)}
-
-	case n <= 0xffffffffffffffff:
-		return []byte{0xfe, byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24),
-			byte(n >> 32), byte(n >> 40), byte(n >> 48), byte(n >> 56)}
-	}
-	return nil
-}
-
-func skipLengthEncodedString(b []byte) (int, error) {
+func SkipLengthEncodedString(b []byte) (int, error) {
 	// Get length
-	num, _, n := readLengthEncodedInteger(b)
+	num, _, n := ReadLengthEncodedInteger(b)
 	if num < 1 {
 		return n, nil
 	}
@@ -234,7 +235,7 @@ var bitCountInByte = [256]uint8{
 }
 
 // Calculate total bit counts in a bitmap
-func bitCount(bitmap []byte) int {
+func BitCount(bitmap []byte) int {
 	var n uint32 = 0
 
 	for _, bit := range bitmap {
@@ -245,12 +246,12 @@ func bitCount(bitmap []byte) int {
 }
 
 // Get the bit set at offset position in bitmap
-func getBit(bitmap []byte, off int) byte {
+func GetBit(bitmap []byte, off int) byte {
 	bit := bitmap[off/8]
 	return bit & (1 << (uint(off) & 7))
 }
 
-func formatBinaryDate(n int, data []byte) ([]byte, error) {
+func FormatBinaryDate(n int, data []byte) ([]byte, error) {
 	switch n {
 	case 0:
 		return []byte("0000-00-00"), nil
@@ -264,7 +265,7 @@ func formatBinaryDate(n int, data []byte) ([]byte, error) {
 	}
 }
 
-func formatBinaryDateTime(n int, data []byte) ([]byte, error) {
+func FormatBinaryDateTime(n int, data []byte) ([]byte, error) {
 	switch n {
 	case 0:
 		return []byte("0000-00-00 00:00:00"), nil
@@ -297,7 +298,7 @@ func formatBinaryDateTime(n int, data []byte) ([]byte, error) {
 	}
 }
 
-func formatBinaryTime(n int, data []byte) ([]byte, error) {
+func FormatBinaryTime(n int, data []byte) ([]byte, error) {
 	if n == 0 {
 		return []byte("0000-00-00"), nil
 	}
@@ -330,37 +331,8 @@ func formatBinaryTime(n int, data []byte) ([]byte, error) {
 	}
 }
 
-func writeBinaryUint16(n uint16) []byte {
-	return []byte{
-		byte(n),
-		byte(n >> 8),
-	}
-}
-
-func writeBinaryUint32(n uint32) []byte {
-	return []byte{
-		byte(n),
-		byte(n >> 8),
-		byte(n >> 16),
-		byte(n >> 24),
-	}
-}
-
-func writeBinaryUint64(n uint64) []byte {
-	return []byte{
-		byte(n),
-		byte(n >> 8),
-		byte(n >> 16),
-		byte(n >> 24),
-		byte(n >> 32),
-		byte(n >> 40),
-		byte(n >> 48),
-		byte(n >> 56),
-	}
-}
-
 // vitess:hack string 和 slice no-copy转换,string和slice的转换只需要拷贝底层的指针，而不是内存拷贝
-func unsafeGetString(b []byte) (s string) {
+func UnsafeGetString(b []byte) (s string) {
 	pbytes := (*reflect.SliceHeader)(unsafe.Pointer(&b))
 	pstring := (*reflect.StringHeader)(unsafe.Pointer(&s))
 	pstring.Data = pbytes.Data
@@ -368,35 +340,86 @@ func unsafeGetString(b []byte) (s string) {
 	return
 }
 
-// vitess:hack string 和 slice no-copy转换,string和slice的转换只需要拷贝底层的指针，而不是内存拷贝
-func unsafeGetSlice(s string) (b []byte) {
-	pbytes := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-	pstring := (*reflect.StringHeader)(unsafe.Pointer(&s))
-	pbytes.Data = pstring.Data
-	pbytes.Len = pstring.Len
-	pbytes.Cap = pstring.Len
+func PStack() string {
+	buf := make([]byte, 1024)
+	n := runtime.Stack(buf, false)
+	return string(buf[0:n])
+}
+
+const digitsPerInteger = 9
+
+func ParseDecimalType(data []byte, precision, decimals int, useDecimal bool) (interface{}, int, error) {
+	integral := precision - decimals
+	uncompIntegral := int(integral / digitsPerInteger)
+	uncompFractional := int(decimals / digitsPerInteger)
+	compIntegral := integral - (uncompIntegral * digitsPerInteger)
+	compFractional := decimals - (uncompFractional * digitsPerInteger)
+
+	binSize := uncompIntegral*4 + compressedBytes[compIntegral] +
+		uncompFractional*4 + compressedBytes[compFractional]
+
+	buf := make([]byte, binSize)
+	copy(buf, data[:binSize])
+
+	// Going to destroy data
+	data = buf
+
+	// Support negative decimals:
+	// The sign is encoded in the high bit of the the byte, but this bit may also be used in the value
+	value := uint32(data[0])
+	var res bytes.Buffer
+	var mask uint32 = 0
+	if value&0x80 == 0 {
+		mask = uint32((1 << 32) - 1)
+		res.WriteString("-")
+	}
+
+	// Clear sign
+	data[0] ^= 0x80
+
+	pos, value := parseDecimalDecompressValue(compIntegral, data, uint8(mask))
+	res.WriteString(fmt.Sprintf("%d", value))
+
+	for i := 0; i < uncompIntegral; i++ {
+		value = binary.BigEndian.Uint32(data[pos:]) ^ mask
+		pos = pos + 4
+		res.WriteString(fmt.Sprintf("%09d", value))
+	}
+
+	res.WriteString(".")
+
+	for i := 0; i < uncompFractional; i++ {
+		value = binary.BigEndian.Uint32(data[pos:]) ^ mask
+		pos = pos + 4
+		res.WriteString(fmt.Sprintf("%09d", value))
+	}
+
+	if size, value := parseDecimalDecompressValue(compFractional, data[pos:], uint8(mask)); size > 0 {
+		res.WriteString(fmt.Sprintf("%0*d", compFractional, value))
+		pos = pos + size
+	}
+	if useDecimal {
+		f, err := decimal.NewFromString(UnsafeGetString(res.Bytes()))
+		return f, pos, err
+	}
+
+	f, err := strconv.ParseFloat(UnsafeGetString(res.Bytes()), 64)
+	return f, pos, err
+}
+
+var compressedBytes = []int{0, 1, 1, 2, 2, 3, 3, 4, 4, 4}
+
+func parseDecimalDecompressValue(compIndx int, data []byte, mask uint8) (size int, value uint32) {
+	size = compressedBytes[compIndx]
+	buff := make([]byte, size)
+	for i := 0; i < size; i++ {
+		buff[i] = data[i] ^ mask
+	}
+	value = uint32(ReadBigEndianFixedLengthInteger(buff))
 	return
 }
 
-// parses the provided character set.
-// Returns default charset(utf8) if it can't.
-func parseCharset(cs string) uint8 {
-	// Check if it's empty, return utf8. This is a reasonable default.
-	if cs == "" {
-		return CharacterSetUtf8
-	}
-
-	// Check if it's in our map.
-	charset, ok := CharacterSetMap[strings.ToLower(cs)]
-	if ok {
-		return charset
-	}
-
-	// As a fallback, try to readFieldPacket a number. So we support more values.
-	if i, err := strconv.ParseInt(cs, 10, 8); err == nil {
-		return uint8(i)
-	}
-	errLog.Print(errors.Errorf("failed to interpret character set '%v'. Try using an integer value if needed", cs))
-	// No luck. return utf8
-	return CharacterSetUtf8
+// Logger is used to log critical error messages.
+type Logger interface {
+	Print(v ...interface{})
 }

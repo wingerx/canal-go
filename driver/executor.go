@@ -5,7 +5,7 @@ func (mc *MySQLConnector) Query(query string) (*Result, error) {
 }
 
 func (mc *MySQLConnector) QueryMulti(query string) ([]*Result, error) {
-	return mc.writeMultiQueryComPacket(query)
+	return mc.writeMultiComQueriesPacket(query)
 }
 
 func (mc *MySQLConnector) Update(update string) (*Result, error) {
@@ -14,7 +14,7 @@ func (mc *MySQLConnector) Update(update string) (*Result, error) {
 
 func (mc *MySQLConnector) executor(command string) (*Result, error) {
 	if mc.IsConnected() {
-		return mc.writeQueryComPacket(command)
+		return mc.writeComQueryPacket(command)
 	}
 	return nil, ErrInvalidConn
 }

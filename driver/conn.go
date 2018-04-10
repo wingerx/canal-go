@@ -7,7 +7,8 @@ import (
 	"io"
 	"github.com/juju/errors"
 	"context"
-	"github.com/woqutech/drt/sync2"
+	. "github.com/woqutech/drt/tools"
+	"os"
 )
 
 const (
@@ -47,7 +48,7 @@ type MySQLConnector struct {
 	charset     string
 	dbname      string
 	connTimeout time.Duration
-	connected   sync2.AtomicBool
+	connected   AtomicBool
 
 	//handshake packet
 	*HandshakeInitPacket
@@ -60,6 +61,7 @@ func NewMySQLConnector(address, username, password, dbName string) *MySQLConnect
 		username:    username,
 		password:    password,
 		dbname:      dbName,
+		connected:   NewAtomicBool(false),
 		connTimeout: DEFAULT_CONNECT_TIMEOUT,
 	}
 }
@@ -107,26 +109,26 @@ func (mc *MySQLConnector) Connect(ctx context.Context) error {
 		// wait for them and terminate them properly in the
 		// background.
 		go func() {
-			dialCR := <-status // This one can take a while.
-			if dialCR.err != nil {
-				// Dial failed, nothing else to do.
+			dial := <-status
+			if dial.err != nil {
+				// return nothing if dial failed
 				return
 			}
-			// Dial worked, close the connection, wait for the end.
+			// if dial worked, close the connection, wait for the end.
 			// We wait as not to leave a channel with an unread value.
-			dialCR.conn.Close()
+			dial.conn.Close()
 			<-status
 		}()
 		return ctx.Err()
 	case cr := <-status:
+		// Dial failed, no connection was established.
 		if cr.err != nil {
-			// Dial failed, no connection was ever established.
 			return cr.err
 		}
-
+		// Dial working, wait handshake
 	}
 
-	// Wait for the end of the handshake.
+	// Wait for the end of the handshake
 	select {
 	case <-ctx.Done():
 		// We are interrupted. Close the connection, wait for
@@ -176,6 +178,7 @@ func negotiate(mc *MySQLConnector) error {
 		errLog.Print(err)
 		return err
 	}
+	// set connection status
 	mc.connected.Set(true)
 
 	return nil
@@ -186,6 +189,10 @@ func negotiate(mc *MySQLConnector) error {
 // (2) a single statement sent to the MySQL server, or
 // (3) a single row sent to the client.
 // This method returns a generic error, not a SQLError.
+func (c *Conn) ReadPacket() ([]byte, error) {
+	return c.readPacket()
+}
+
 func (c *Conn) readPacket() ([]byte, error) {
 	// Optimize for a single packet case.
 	data, err := c.readOnePacket()
@@ -235,7 +242,7 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 
 	c.sequence++
 
-	payloadLength := readBinaryUint24(header[0:3])
+	payloadLength := ReadBinaryUint24(header[0:3])
 	if payloadLength == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
@@ -322,6 +329,9 @@ func (mc *MySQLConnector) SetCharSet(charset string) {
 	mc.charset = charset
 }
 
+func (mc *MySQLConnector) hostname() (string, error) {
+	return os.Hostname()
+}
 func isEOFPacket(data []byte) bool {
 	return data[0] == EOF_HEADER && len(data) <= 5
 }
