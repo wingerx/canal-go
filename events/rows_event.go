@@ -7,7 +7,7 @@ import (
 	"time"
 	. "github.com/woqutech/drt/tools"
 	"github.com/juju/errors"
-	"log"
+	log "github.com/golang/glog"
 )
 
 type RowsEvent struct {
@@ -18,6 +18,7 @@ type RowsEvent struct {
 	ColumnBitmap1 []byte          //len = (ColumnCount + 7) / 8
 	ColumnBitmap2 []byte          //if UPDATE_ROWS_EVENT_V1 or v2, len = (ColumnCount + 7) / 8
 	Rows          [][]interface{} //rows: invalid: int64, float64, bool, []byte, string
+	ExtraData     []byte
 
 	useDecimal bool
 }
@@ -43,11 +44,9 @@ type RowsEvent struct {
 //       list of non-NULL encoded values.
 func NewRowsEvent(format *FormatDescriptionEvent, tables map[uint64]*TableMapEvent, eventType EventType, data []byte) (Event, error) {
 
-	var tableIDSize int
+	var tableIDSize = 6
 	if format.EventTypeHeaderLengths[TABLE_MAP_EVENT-1] == 6 {
 		tableIDSize = 4
-	} else {
-		tableIDSize = 6
 	}
 
 	event := new(RowsEvent)
@@ -60,6 +59,14 @@ func NewRowsEvent(format *FormatDescriptionEvent, tables map[uint64]*TableMapEve
 	event.Flags = binary.LittleEndian.Uint16(data[offset : offset+2])
 	offset += 2
 
+	if eventType == UPDATE_ROWS_EVENT_V2 || eventType == WRITE_ROWS_EVENT_V2 || eventType == DELETE_ROWS_EVENT_V2 {
+		dataLen := binary.LittleEndian.Uint16(data[offset:])
+		offset += 2
+
+		event.ExtraData = data[offset : offset+int(dataLen-2)]
+		offset += int(dataLen - 2)
+	}
+
 	var n int
 	event.ColumnCount, _, n = ReadLengthEncodedInteger(data[offset:])
 	offset += n
@@ -68,7 +75,7 @@ func NewRowsEvent(format *FormatDescriptionEvent, tables map[uint64]*TableMapEve
 	event.ColumnBitmap1 = data[offset : offset+bitCount]
 	offset += bitCount
 
-	if eventType == UPDATE_ROWS_EVENT_V1 {
+	if eventType == UPDATE_ROWS_EVENT_V1 || eventType == UPDATE_ROWS_EVENT_V2 {
 		event.ColumnBitmap2 = data[offset : offset+bitCount]
 		offset += bitCount
 	}
@@ -113,7 +120,7 @@ func (re *RowsEvent) parseRows(data []byte, table *TableMapEvent, bitmap []byte)
 	count := ByteCountFromBitCount(BitCount(bitmap))
 
 	nullBitmap := data[offset : offset+count]
-	offset = offset + count
+	offset += count
 	nullBitIndex := 0
 
 	var n int
@@ -124,10 +131,9 @@ func (re *RowsEvent) parseRows(data []byte, table *TableMapEvent, bitmap []byte)
 		}
 
 		isNull := (uint32(nullBitmap[nullBitIndex/8]) >> uint32(nullBitIndex%8)) & 0x01
-
+		nullBitIndex ++
 		if isNull > 0 {
 			row[j] = nil
-			nullBitIndex = nullBitIndex + 1
 			continue
 		}
 
@@ -137,10 +143,10 @@ func (re *RowsEvent) parseRows(data []byte, table *TableMapEvent, bitmap []byte)
 			return 0, nil
 		}
 		offset = offset + n
-		nullBitIndex = nullBitIndex + 1
 	}
 
 	re.Rows = append(re.Rows, row)
+
 	return offset, nil
 }
 
