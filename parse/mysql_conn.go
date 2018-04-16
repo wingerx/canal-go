@@ -53,14 +53,24 @@ func (mc *MySQLConnection) Connect() error {
 }
 
 func (mc *MySQLConnection) dump(binlogName string, position uint32, sinkFunc SinkFunction) error {
+	ld := NewDumpAllEventLogDecoder()
+	lf := NewLogFetcher(mc, ld)
+	return mc.fetchEvent(binlogName, position, lf, sinkFunc)
+}
+
+func (mc *MySQLConnection) sink(binlogName string, position uint32, sinkFunc SinkFunction) error {
+	ld := NewSinkEventLogDecoder()
+	lf := NewLogFetcher(mc, ld)
+	return mc.fetchEvent(binlogName, position, lf, sinkFunc)
+}
+
+func (mc *MySQLConnection) fetchEvent(binlogName string, position uint32, lf *LogFetcher, sinkFunc SinkFunction) error {
 	mc.updateSettings()
 	// ignore err
 	mc.sendRegisterSlave()
 	// send binlog dump cmd
 	mc.sendBinlogDumpCommand(binlogName, position)
 	// dump & parse event
-	ld := NewLogDecoder(UNKNOWN_EVENT, PREVIOUS_GTIDS_LOG_EVENT)
-	lf := NewLogFetcher(mc, ld)
 	lf.ctx, lf.cancel = mc.ctx, mc.cancel
 
 	streamer := lf.Fetch()

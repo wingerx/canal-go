@@ -27,6 +27,19 @@ func NewLogDecoder(from, to EventType) *LogDecoder {
 	return ld
 }
 
+func NewDumpAllEventLogDecoder() *LogDecoder {
+	return NewLogDecoder(UNKNOWN_EVENT, PREVIOUS_GTIDS_LOG_EVENT)
+}
+
+func NewSinkEventLogDecoder() *LogDecoder {
+	ld := NewEmptyLogDecoder()
+	ld.handle(ROTATE_EVENT)
+	ld.handle(FORMAT_DESCRIPTION_EVENT)
+	ld.handle(QUERY_EVENT)
+	ld.handle(XID_EVENT)
+	return ld
+}
+
 func (ld *LogDecoder) initHandleSet(from, to EventType) {
 	ld.handleSet = make(map[EventType]bool)
 	for i := from; i <= to; i++ {
