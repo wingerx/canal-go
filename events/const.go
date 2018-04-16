@@ -1,13 +1,12 @@
 package events
 
 import (
-	"strings"
 	"strconv"
+	"strings"
 	"unicode"
 )
 
 const (
-	//MinBinlogVersion     byte  = 4
 	EventHeaderSize         = 19
 	DATETIMEF_INT_OFS int64 = 0x8000000000
 )
@@ -53,10 +52,9 @@ const (
 	ANONYMOUS_GTID_LOG_EVENT
 	PREVIOUS_GTIDS_LOG_EVENT  // 0x23
 
+	// end of event marker
+	ENUM_END_EVENT
 )
-
-// end of event marker
-const ENUM_END_EVENT = byte(164)
 
 func (e EventType) String() string {
 	switch e {
@@ -138,9 +136,10 @@ func (e EventType) String() string {
 }
 
 const (
-	QUERY_HEADER_MINIMAL_LEN            = 4 + 4 + 1 + 2
-	QUERY_HEADER_LEN                    = QUERY_HEADER_MINIMAL_LEN + 2
-	LOG_EVENT_TYPES                     = ENUM_END_EVENT - 1
+	QUERY_HEADER_MINIMAL_LEN = 4 + 4 + 1 + 2
+	QUERY_HEADER_LEN         = QUERY_HEADER_MINIMAL_LEN + 2
+	LOG_EVENT_TYPES          = uint8(ENUM_END_EVENT) - 1
+
 	ST_SERVER_VER_LEN                   = 50
 	STOP_HEADER_LEN                     = 0
 	LOAD_HEADER_LEN                     = 4 + 4 + 4 + 1 + 1 + 4

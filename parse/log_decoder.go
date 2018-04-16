@@ -1,8 +1,8 @@
 package parse
 
 import (
-	. "github.com/woqutech/drt/events"
 	"github.com/juju/errors"
+	. "github.com/woqutech/drt/events"
 )
 
 type LogDecoder struct {
@@ -67,10 +67,12 @@ func (ld *LogDecoder) decode(header *EventHeader, data []byte) (event Event, err
 	//var event Event
 	//var err error
 	if header.Type != FORMAT_DESCRIPTION_EVENT {
+		// remove checksum bytes
 		if ld.format.ChecksumAlgorithm != BINLOG_CHECKSUM_ALG_OFF && ld.format.ChecksumAlgorithm != BINLOG_CHECKSUM_ALG_UNDEF {
 			data = data[0 : len(data)-4]
 		}
 	}
+
 	switch header.Type {
 	case QUERY_EVENT:
 		event, err = NewQueryLogEvent(data)
@@ -105,9 +107,10 @@ func (ld *LogDecoder) decode(header *EventHeader, data []byte) (event Event, err
 		event, err = NewUserVarLogEvent(data)
 	case INTVAR_EVENT:
 		event, err = NewIntVarEvent(data)
+	case HEARTBEAT_EVENT:
+		event, err = NewHeartbeatLogEvent(data)
 	default:
-		event, err = NewIgnoreLogEvent(data)
-
+		event, err = NewUnNamedLogEvent(data)
 	}
 
 	if err != nil {

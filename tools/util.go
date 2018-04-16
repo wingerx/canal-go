@@ -1,17 +1,17 @@
 package tools
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/binary"
-	"io"
 	"fmt"
+	"github.com/shopspring/decimal"
+	"io"
 	"math"
 	"reflect"
-	"unsafe"
 	"runtime"
-	"github.com/shopspring/decimal"
 	"strconv"
-	"bytes"
+	"unsafe"
 )
 
 // https://dev.mysql.com/doc/internals/en/integer.html#packet-Protocol::LengthEncodedInteger
@@ -247,7 +247,7 @@ func BitCount(bitmap []byte) int {
 
 // Get the bit set at offset position in bitmap
 func GetBit(bitmap []byte, off int) byte {
-	bit := bitmap[off/8]
+	bit := bitmap[off>>3]
 	return bit & (1 << (uint(off) & 7))
 }
 

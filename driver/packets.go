@@ -1,13 +1,13 @@
 package driver
 
 import (
-	"encoding/binary"
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"github.com/juju/errors"
-	"strings"
-	"strconv"
 	. "github.com/woqutech/drt/tools"
+	"strconv"
+	"strings"
 )
 
 // |Type			  |Name						   	  |Description
@@ -143,19 +143,19 @@ func (mc *MySQLConnector) WriteRegisterSlavePacket(slaveId uint32) error {
 	offset += 4
 
 	data[offset] = uint8(len(hostname))
-	offset ++
+	offset++
 
 	n := copy(data[offset:], hostname)
 	offset += n
 
 	data[offset] = uint8(len(mc.username))
-	offset ++
+	offset++
 
 	n = copy(data[offset:], mc.username)
 	offset += n
 
 	data[offset] = uint8(len(mc.password))
-	offset ++
+	offset++
 
 	n = copy(data[offset:], mc.password)
 	offset += n
@@ -371,7 +371,7 @@ func (mc *MySQLConnector) handleHandshakeInitPacket(data []byte) {
 		p.capabilities = uint32(binary.LittleEndian.Uint16(data[offset:offset+2]))<<16 | p.capabilities
 		offset += 2
 		// 10. skip auth data
-		offset ++
+		offset++
 		// 11. skip reserved
 		offset += 10
 		// 12. append rest of scramble
@@ -635,7 +635,7 @@ func (p FieldData) readFieldPacket() (f *FieldPacket, err error) {
 	offset += n
 
 	// Skip Filler [uint8]
-	offset ++
+	offset++
 
 	// Charset
 	f.Charset = binary.LittleEndian.Uint16(p[offset : offset+2])
@@ -647,7 +647,7 @@ func (p FieldData) readFieldPacket() (f *FieldPacket, err error) {
 
 	// Type
 	f.Type = p[offset]
-	offset ++
+	offset++
 
 	// Flag
 	f.Flag = binary.LittleEndian.Uint16(p[offset : offset+2])
@@ -655,7 +655,7 @@ func (p FieldData) readFieldPacket() (f *FieldPacket, err error) {
 
 	// Decimals
 	f.Decimal = p[offset]
-	offset ++
+	offset++
 
 	// skip Filter [0x00][0x00]
 	offset += 2

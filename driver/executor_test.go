@@ -1,10 +1,10 @@
 package driver
 
 import (
-	"testing"
+	"bytes"
 	"context"
 	"fmt"
-	"bytes"
+	"testing"
 )
 
 func TestExecutor_Query(t *testing.T) {

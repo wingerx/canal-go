@@ -1,10 +1,9 @@
 package parse
 
 import (
-	"testing"
-	log "github.com/golang/glog"
+	"github.com/golang/glog"
 	. "github.com/woqutech/drt/events"
-	"fmt"
+	"testing"
 )
 
 func TestNewMySQLConnection(t *testing.T) {
@@ -17,25 +16,20 @@ func TestNewMySQLConnection(t *testing.T) {
 	//auth.connTimeout = 10
 	auth.ReadTimeout = 10
 
-	mc, err := NewMySQLConnection(auth, 123456)
-	defer mc.Disconnect()
+	mc := NewMySQLConnection(auth, 123456)
 
+	err := mc.Connect()
 	if err != nil {
-		log.Error(err)
-		return
-	}
-	err = mc.Connect()
-	if err != nil {
-		log.Error(err)
+		glog.Error(err)
 		return
 	}
 	err = mc.dump("mysql-bin.000011", 259, func(event *LogEvent) bool {
-		log.Info(event.Header.Type, event.Header.LogPos)
+		glog.Info(event.Header.Type, event.Header.LogPos)
 		parse(event)
 		return true
 	})
 	if err != nil {
-		log.Error(err)
+		glog.Error(err)
 		return
 	}
 
@@ -43,17 +37,38 @@ func TestNewMySQLConnection(t *testing.T) {
 func parse(event *LogEvent) {
 	switch e := event.Event.(type) {
 	case *RotateEvent:
-		fmt.Println(string(e.NextFileName), e.NextPosition)
+		glog.Info(string(e.NextFileName), e.NextPosition)
 	case *QueryEvent:
-		fmt.Println(string(e.DatabaseName))
+		glog.Info(string(e.DatabaseName))
+	case *TableMapEvent:
+		glog.Info(e.TableID, string(e.DatabaseName), e.TableName)
 	case *XidEvent:
-		fmt.Println(e.Xid)
+		glog.Info(e.Xid)
 	case *RowsEvent:
-		fmt.Println(e.Table)
+		glog.Info(e.Table)
 	case *RowsQueryEvent:
-		fmt.Println(e.RowsQuery)
+		glog.Info(e.RowsQuery)
 	default:
-		fmt.Println("###")
+		glog.Info(e)
 	}
 
+}
+
+func TestMySQLConnection_Disconnect(t *testing.T) {
+	auth := new(AuthenticInfo)
+	auth.host = "127.0.0.1"
+	auth.port = 3306
+	auth.username = "root"
+	auth.password = "123456"
+	auth.charset = "utf8"
+	//auth.connTimeout = 10
+	auth.ReadTimeout = 10
+
+	mc := NewMySQLConnection(auth, 123456)
+	err := mc.Connect()
+	if err != nil {
+		glog.Error(err)
+		return
+	}
+	defer mc.Disconnect()
 }

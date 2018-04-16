@@ -2,12 +2,12 @@ package parse
 
 import (
 	"context"
-	. "github.com/woqutech/drt/driver"
 	"fmt"
-	"time"
+	"github.com/golang/glog"
 	"github.com/juju/errors"
+	. "github.com/woqutech/drt/driver"
 	. "github.com/woqutech/drt/events"
-	"sync"
+	"time"
 )
 
 type AuthenticInfo struct {
@@ -28,12 +28,12 @@ type MySQLConnection struct {
 	slaveId uint32
 	cancel  context.CancelFunc
 	ctx     context.Context
-	wg      sync.WaitGroup
+	//wg      sync.WaitGroup
 }
 
 type SinkFunction func(event *LogEvent) bool
 
-func NewMySQLConnection(auth *AuthenticInfo, slaveId uint32) (*MySQLConnection, error) {
+func NewMySQLConnection(auth *AuthenticInfo, slaveId uint32) *MySQLConnection {
 	// new driver
 	address := fmt.Sprintf("%v:%d", auth.host, auth.port)
 	conn := NewMySQLConnector(address, auth.username, auth.password, auth.dbName)
@@ -45,15 +45,11 @@ func NewMySQLConnection(auth *AuthenticInfo, slaveId uint32) (*MySQLConnection, 
 	mc.slaveId = slaveId
 	mc.ctx, mc.cancel = context.WithCancel(context.Background())
 
-	return mc, nil
-}
-
-func ForkMysqlConnnection(auth *AuthenticInfo, slaveId uint32) (*MySQLConnection, error) {
-	return NewMySQLConnection(auth, slaveId)
+	return mc
 }
 
 func (mc *MySQLConnection) Connect() error {
-	return mc.MySQLConnector.Connect(context.Background())
+	return mc.MySQLConnector.Connect(mc.ctx)
 }
 
 func (mc *MySQLConnection) dump(binlogName string, position uint32, sinkFunc SinkFunction) error {
@@ -65,8 +61,7 @@ func (mc *MySQLConnection) dump(binlogName string, position uint32, sinkFunc Sin
 	// dump & parse event
 	ld := NewLogDecoder(UNKNOWN_EVENT, PREVIOUS_GTIDS_LOG_EVENT)
 	lf := NewLogFetcher(mc, ld)
-	lf.ctx = mc.ctx
-	lf.cancel = mc.cancel
+	lf.ctx, lf.cancel = mc.ctx, mc.cancel
 
 	streamer := lf.Fetch()
 	for {
@@ -86,10 +81,12 @@ func (mc *MySQLConnection) dump(binlogName string, position uint32, sinkFunc Sin
 // See http://dev.mysql.com/doc/internals/en/com-binlog-dump.html for syntax
 // Returns a SQLError.
 func (mc *MySQLConnection) sendBinlogDumpCommand(binlogName string, position uint32) error {
+	glog.Infof("binlog dump with position [%s:%d]", binlogName, position)
 	return mc.WriteBinlogDumpPacket(binlogName, mc.slaveId, position)
 }
 
 func (mc *MySQLConnection) sendRegisterSlave() error {
+	glog.Infof("register slave with id [%d]", mc.slaveId)
 	return mc.WriteRegisterSlavePacket(mc.slaveId)
 }
 func (mc *MySQLConnection) updateSettings() {
@@ -152,9 +149,25 @@ func (mc *MySQLConnection) loadBinlogFmtImage(query string) (string, error) {
 	}
 }
 
+func fork(auth *AuthenticInfo, slaveId uint32) *MySQLConnection {
+	return NewMySQLConnection(auth, slaveId)
+}
+
 func (mc *MySQLConnection) Disconnect() error {
+	glog.Infof("try to disconnect %v", fmt.Sprintf("%v:%d", mc.auth.host, mc.auth.port))
 	mc.cancel()
-	return mc.MySQLConnector.Close()
+	err := mc.MySQLConnector.Close()
+	if mc.ConnectionId() > 0 {
+		glog.Infof("kill dump connectionId: %d", mc.ConnectionId())
+		kc := fork(mc.auth, mc.slaveId)
+		err := kc.Connect()
+		if err != nil {
+			glog.Errorf("fork connection failed.%v", err)
+		}
+		kc.Update(fmt.Sprintf("KILL CONNECTION %d", mc.ConnectionId()))
+		kc.Close()
+	}
+	return err
 }
 
 func (mc *MySQLConnection) Reconnect() error {

@@ -3,11 +3,11 @@ package events
 import (
 	"encoding/binary"
 	"fmt"
+	log "github.com/golang/glog"
+	"github.com/juju/errors"
+	. "github.com/woqutech/drt/tools"
 	"strconv"
 	"time"
-	. "github.com/woqutech/drt/tools"
-	"github.com/juju/errors"
-	log "github.com/golang/glog"
 )
 
 type RowsEvent struct {
@@ -131,7 +131,7 @@ func (re *RowsEvent) parseRows(data []byte, table *TableMapEvent, bitmap []byte)
 		}
 
 		isNull := (uint32(nullBitmap[nullBitIndex/8]) >> uint32(nullBitIndex%8)) & 0x01
-		nullBitIndex ++
+		nullBitIndex++
 		if isNull > 0 {
 			row[j] = nil
 			continue
@@ -438,21 +438,21 @@ func parseTime2Type(data []byte, meta uint16) (string, int, error) {
 		intPart = int64(ReadBigEndianFixedLengthInteger(data[0:3])) - TIMEF_INT_OFS
 		frac = int64(data[3])
 		/*
-		   Negative values are stored with reverse fractional part order,
-		   for binary sort compatibility.
+			   Negative values are stored with reverse fractional part order,
+			   for binary sort compatibility.
 
-			 Disk value  intpart frac   Time value   Memory value
-			 800000.00    0      0      00:00:00.00  0000000000.000000
-			 7FFFFF.FF   -1      255   -00:00:00.01  FFFFFFFFFF.FFD8F0
-			 7FFFFF.9D   -1      99    -00:00:00.99  FFFFFFFFFF.F0E4D0
-			 7FFFFF.00   -1      0     -00:00:01.00  FFFFFFFFFF.000000
-			 7FFFFE.FF   -1      255   -00:00:01.01  FFFFFFFFFE.FFD8F0
-			 7FFFFE.F6   -2      246   -00:00:01.10  FFFFFFFFFE.FE7960
+				 Disk value  intpart frac   Time value   Memory value
+				 800000.00    0      0      00:00:00.00  0000000000.000000
+				 7FFFFF.FF   -1      255   -00:00:00.01  FFFFFFFFFF.FFD8F0
+				 7FFFFF.9D   -1      99    -00:00:00.99  FFFFFFFFFF.F0E4D0
+				 7FFFFF.00   -1      0     -00:00:01.00  FFFFFFFFFF.000000
+				 7FFFFE.FF   -1      255   -00:00:01.01  FFFFFFFFFE.FFD8F0
+				 7FFFFE.F6   -2      246   -00:00:01.10  FFFFFFFFFE.FE7960
 
-			 Formula to convert fractional part from disk format
-			 (now stored in "frac" variable) to absolute value: "0x100 - frac".
-			 To reconstruct in-memory value, we shift
-			 to the next integer value and then substruct fractional part.
+				 Formula to convert fractional part from disk format
+				 (now stored in "frac" variable) to absolute value: "0x100 - frac".
+				 To reconstruct in-memory value, we shift
+				 to the next integer value and then substruct fractional part.
 		*/
 		if intPart < 0 && frac > 0 {
 			intPart = intPart + 1 // Shift to the next integer value

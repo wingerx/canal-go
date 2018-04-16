@@ -1,10 +1,10 @@
 package parse
 
 import (
-	"strings"
 	. "github.com/woqutech/drt/tools"
 	"log"
 	"os"
+	"strings"
 )
 
 type binlogFormatImage []string

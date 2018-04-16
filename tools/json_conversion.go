@@ -194,7 +194,7 @@ func (d *jsonBinaryDecoder) decodeObjectOrArray(data []byte, isSmall bool, isObj
 		tp := data[entryOffset]
 
 		if isInlineValue(tp, isSmall) {
-			values[i] = d.decodeValue(tp, data[entryOffset+1:entryOffset+valueEntrySize], )
+			values[i] = d.decodeValue(tp, data[entryOffset+1:entryOffset+valueEntrySize])
 			continue
 		}
 

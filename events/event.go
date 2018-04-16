@@ -55,7 +55,7 @@ func NewEventHeader(data []byte) (*EventHeader, error) {
 
 	// MySQL-defined binlog event type
 	header.Type = EventType(data[offset])
-	offset ++
+	offset++
 
 	// ID of the originating MySQL server; used to filter out events in circular replication
 	header.ServerId = binary.LittleEndian.Uint32(data[offset : offset+4])
@@ -78,4 +78,13 @@ func NewEventHeader(data []byte) (*EventHeader, error) {
 	offset += 2
 
 	return header, nil
+}
+
+// used to record all unnamed events
+type UnNamedLogEvent struct {
+	Data []byte
+}
+
+func NewUnNamedLogEvent(data []byte) (Event, error) {
+	return &UnNamedLogEvent{data}, nil
 }

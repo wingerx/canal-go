@@ -2,13 +2,14 @@ package driver
 
 import (
 	"bufio"
-	"net"
-	"time"
-	"io"
-	"github.com/juju/errors"
 	"context"
+	"github.com/golang/glog"
+	"github.com/juju/errors"
 	. "github.com/woqutech/drt/tools"
+	"io"
+	"net"
 	"os"
+	"time"
 )
 
 const (
@@ -74,6 +75,7 @@ func NewMySQLConnector(address, username, password, dbName string) *MySQLConnect
 // - a connectChan with a *Conn and no error, then another one
 //   with possibly an error.
 func (mc *MySQLConnector) Connect(ctx context.Context) error {
+	glog.Infof("start to connect [%v %s]", mc.address, mc.dbname)
 	status := make(chan connectChan)
 	go func() {
 		defer close(status)
@@ -126,6 +128,7 @@ func (mc *MySQLConnector) Connect(ctx context.Context) error {
 			return cr.err
 		}
 		// Dial working, wait handshake
+		glog.Infof("dial [%v] success, wait for handshake", mc.address)
 	}
 
 	// Wait for the end of the handshake
@@ -146,6 +149,7 @@ func (mc *MySQLConnector) Connect(ctx context.Context) error {
 			return cr.err
 		}
 	}
+	glog.Infof("connect [%v] success, connectionId: [%d]", mc.address, mc.connectionId)
 	return nil
 }
 
@@ -167,6 +171,7 @@ func negotiate(mc *MySQLConnector) error {
 		mc.close()
 		return err
 	}
+	glog.Info("handshake success, sent out auth packet")
 	// write auth packet
 	if err := mc.writeAuthPacket(); err != nil {
 		mc.close()
@@ -322,7 +327,7 @@ func (c *Conn) close() error {
 }
 
 func (mc *MySQLConnector) SetConnTimeout(timeout int) {
-	mc.connTimeout = time.Duration(timeout)
+	mc.connTimeout = time.Second * time.Duration(timeout)
 }
 
 func (mc *MySQLConnector) SetCharSet(charset string) {
@@ -334,4 +339,8 @@ func (mc *MySQLConnector) hostname() (string, error) {
 }
 func isEOFPacket(data []byte) bool {
 	return data[0] == EOF_HEADER && len(data) <= 5
+}
+
+func (mc *MySQLConnector) ConnectionId() uint32 {
+	return mc.connectionId
 }

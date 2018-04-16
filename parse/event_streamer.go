@@ -1,9 +1,10 @@
 package parse
 
 import (
-	. "github.com/woqutech/drt/events"
-	"github.com/juju/errors"
 	"context"
+	"github.com/golang/glog"
+	"github.com/juju/errors"
+	. "github.com/woqutech/drt/events"
 )
 
 type EventStreamer struct {
@@ -43,6 +44,7 @@ func (es *EventStreamer) close() {
 }
 
 func (es *EventStreamer) closeWithError(err error) {
+	glog.Errorf("close dump stream by %v", err)
 	if err == nil {
 		err = errors.New("sync was closed")
 	}

@@ -3,9 +3,9 @@ package events
 import (
 	"encoding/binary"
 	"github.com/juju/errors"
-	"strings"
-	"io"
 	. "github.com/woqutech/drt/tools"
+	"io"
+	"strings"
 )
 
 // A format description event is the first event for binlog-version 4;
@@ -52,7 +52,7 @@ func NewFormatDescriptionEvent(data []byte) (Event, error) {
 	// Length of the binlog event header of following events; should always match
 	// const EventHeaderSize (1 byte)
 	event.EventHeaderLength = data[offset]
-	offset ++
+	offset++
 	if event.EventHeaderLength != byte(EventHeaderSize) {
 		return nil, errors.Errorf("header length too short, required [%d] but get [%d]", EventHeaderSize, event.EventHeaderLength)
 	}
@@ -175,7 +175,7 @@ func NewQueryLogEvent(data []byte) (Event, error) {
 
 	// Database name length (1 byte)
 	dbNameLength := uint8(data[offset])
-	offset ++
+	offset++
 
 	// Error code (2 bytes)
 	event.ErrorCode = binary.LittleEndian.Uint16(data[offset : offset+2])
@@ -194,7 +194,7 @@ func NewQueryLogEvent(data []byte) (Event, error) {
 	offset += int(dbNameLength)
 
 	// Skip [00] byte
-	offset ++
+	offset++
 
 	// Query (string[EOF])
 	event.Query = data[offset:]
@@ -379,7 +379,7 @@ func NewTableMapEvent(format *FormatDescriptionEvent, data []byte) (Event, error
 
 	// Length of the database name (1 byte)
 	dbNameLength := int(data[offset])
-	offset ++
+	offset++
 
 	// Database name (string[dbNameLength])
 	dbName := data[offset : offset+dbNameLength+1]
@@ -388,7 +388,7 @@ func NewTableMapEvent(format *FormatDescriptionEvent, data []byte) (Event, error
 
 	// Length of the table name
 	tblNameLength := int(data[offset])
-	offset ++
+	offset++
 
 	// Table name (string[tableLength])
 	tblName := data[offset : offset+tblNameLength+1]
@@ -471,7 +471,7 @@ func (e *TableMapEvent) parseMetadata(data []byte) error {
 
 	for col, t := range e.ColumnTypes {
 		switch t {
-		// Tightly packed due to MySQL Bug #37426 ref: https://bugs.mysql.com/bug.php?id=37426
+		// due to Bug37426 layout of the string metadata is a bit tightly packed: https://bugs.mysql.com/bug.php?id=37426
 		case MYSQL_TYPE_STRING:
 			x := uint16(data[offset]) << 8 // type
 			x = x + uint16(data[offset+1]) // length
@@ -492,12 +492,12 @@ func (e *TableMapEvent) parseMetadata(data []byte) error {
 			MYSQL_TYPE_FLOAT,
 			MYSQL_TYPE_GEOMETRY:
 			e.ColumnMetadata[col] = uint16(data[offset])
-			offset ++
+			offset++
 		case MYSQL_TYPE_TIME2,
 			MYSQL_TYPE_DATETIME2,
 			MYSQL_TYPE_TIMESTAMP2:
 			e.ColumnMetadata[col] = uint16(data[offset])
-			offset ++
+			offset++
 		case MYSQL_TYPE_NEWDATE,
 			MYSQL_TYPE_ENUM,
 			MYSQL_TYPE_SET,
@@ -565,11 +565,11 @@ func NewUserVarLogEvent(data []byte) (Event, error) {
 	// 1 byte. Non-zero if the variable value is the SQL NULL value, 0 otherwise.
 	//  If this byte is 0, the following parts exist in the event.
 	event.IsNull = data[offset]
-	offset ++
+	offset++
 	if event.IsNull == 0 {
 		// 1 byte user variable type
 		event.Type = data[offset]
-		offset ++
+		offset++
 
 		// 4 byte user character set
 		event.Charset = binary.LittleEndian.Uint32(data[offset : offset+4])
@@ -602,4 +602,12 @@ func NewIntVarEvent(data []byte) (Event, error) {
 
 	event.Value = binary.LittleEndian.Uint64(data[1 : 1+8])
 	return event, nil
+}
+
+type HeartbeatLogEvent struct {
+	LogIdent []byte
+}
+
+func NewHeartbeatLogEvent(data []byte) (Event, error) {
+	return &HeartbeatLogEvent{data}, nil
 }

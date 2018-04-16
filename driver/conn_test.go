@@ -1,11 +1,11 @@
 package driver
 
 import (
-	"testing"
-	"flag"
-	"os"
 	"context"
+	"flag"
 	"github.com/stretchr/testify/assert"
+	"os"
+	"testing"
 )
 
 func TestMain(m *testing.M) {

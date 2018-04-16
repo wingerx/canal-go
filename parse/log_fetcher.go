@@ -2,12 +2,12 @@ package parse
 
 import "fmt"
 import (
-	. "github.com/woqutech/drt/tools"
-	"time"
 	"context"
-	"github.com/juju/errors"
-	"sync"
 	log "github.com/golang/glog"
+	"github.com/juju/errors"
+	. "github.com/woqutech/drt/tools"
+	"sync"
+	"time"
 )
 
 type LogFetcher struct {
@@ -23,8 +23,6 @@ type LogFetcher struct {
 }
 
 func NewLogFetcher(conn *MySQLConnection, ld *LogDecoder) *LogFetcher {
-	log.Infof("create BinlogFetch with connect auth %v", conn.auth)
-
 	lf := new(LogFetcher)
 	lf.conn = conn
 	lf.decoder = ld
@@ -33,6 +31,8 @@ func NewLogFetcher(conn *MySQLConnection, ld *LogDecoder) *LogFetcher {
 }
 
 func (lf *LogFetcher) Fetch() *EventStreamer {
+	log.Infof("start fetch binlog with slave id %d", lf.conn.slaveId)
+
 	streamer := NewStreamer()
 
 	lf.wg.Add(1)
@@ -49,18 +49,19 @@ func (lf *LogFetcher) fetch(streamer *EventStreamer) {
 	}()
 
 	for {
+		//set read timeout
+		//if lf.conn.auth.ReadTimeout > 0 {
+		//	lf.conn.SetReadDeadline(time.Now().Add(time.Second * 10))
+		//}
 		data, err := lf.conn.ReadPacket()
 		if err != nil {
 			errLog.Print(err)
 			streamer.closeWithError(err)
 			return
 		}
-
-		//set read timeout
-		if lf.conn.auth.ReadTimeout > 0 {
-			lf.conn.SetReadDeadline(time.Now().Add(time.Duration(lf.conn.auth.ReadTimeout)))
-		}
-
+		//if lf.conn.auth.ReadTimeout > 0 {
+		//	lf.conn.SetReadDeadline(time.Time{})
+		//}
 		switch data[0] {
 		case OK_HEADER:
 			// skip ok
@@ -86,9 +87,10 @@ func (lf *LogFetcher) fetch(streamer *EventStreamer) {
 			continue
 		}
 	}
+
 }
 
-// Close closes the LogFetcher.
+// Close the LogFetcher.
 func (lf *LogFetcher) Close() {
 	lf.m.Lock()
 	defer lf.m.Unlock()

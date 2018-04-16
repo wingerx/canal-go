@@ -1,8 +1,8 @@
 package events
 
 import (
-	"testing"
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 type eventTypeToStringTest struct {
