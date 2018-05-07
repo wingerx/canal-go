@@ -1,0 +1,190 @@
+syntax = "proto3";
+
+package protoc;
+
+message Entry {
+    // 协议头部信息
+    Header header = 1;
+
+    // 事件类型
+    EntryType entryType = 2;
+
+    // 传输的二进制数组
+    bytes storeValue = 3;
+}
+
+// message Header
+message Header {
+    // 协议的版本号
+    int32 version = 1;
+
+    // binlog
+    string logfileName = 2;
+
+    // binlog 文件的偏移位置
+    int64 logfileOffset = 3;
+
+    // 服务端serverId
+    int64 serverId = 4;
+
+    // 变更数据的编码
+    string serverEncode = 5;
+
+    // 变更数据的执行时间
+    int64 executeTime = 6;
+
+    // 变更数据的来源
+    Type sourceType = 7;
+
+    // 变更数据的schema name
+    string schemaName = 8;
+
+    // 变更数据的table name
+    string tableName = 9;
+
+    // 每个event的长度
+    int64 eventLength = 10;
+
+    // GTID string
+    string gtid = 11;
+
+    // last committed id
+    int64 lastCommitted = 12;
+
+    // sequence number
+    int64 seqNum = 13;
+
+    // 数据变更类型
+    EventType eventType = 14;
+
+    // 预留扩展
+    repeated Pair props = 15;
+}
+
+// 每个字段的数据结构
+message Column {
+    // 字段下标
+    int32 index = 1;
+
+    // 字段类型
+    int32 sqlType = 2;
+
+    // 字段名称(忽略大小写)，在mysql中是没有的
+    string name = 3;
+
+    // 是否是主键
+    bool isKey = 4;
+
+    // 如果EventType=UPDATE,用于标识这个字段值是否有修改
+    bool updated = 5;
+
+    // 标识是否为空
+    bool isNull = 6;
+
+    // 字段值,timestamp,Datetime是一个时间格式的文本
+    string value = 7;
+
+    // 对应数据对象原始长度
+    int32 length = 8;
+
+    // 字段mysql类型
+    string mysqlType = 9;
+
+    // 预留扩展
+    repeated Pair props = 10;
+
+
+}
+
+message RowData {
+
+    // 字段信息，增量数据(修改前,删除前)
+    repeated Column beforeColumns = 1;
+
+    // 字段信息，增量数据(修改后,新增后)
+    repeated Column afterColumns = 2;
+
+    // 预留扩展
+    repeated Pair props = 3;
+}
+
+// message row 每行变更数据的数据结构
+message RowChange {
+
+    // tableId,由数据库产生
+    int64 tableId = 1;
+
+    // 数据变更类型
+    EventType eventType = 2;
+
+    // 标识是否是ddl语句
+    bool isDDL = 10;
+
+    // ddl/query的sql语句
+    string sql = 11;
+
+    // 一次数据库变更可能存在多行
+    repeated RowData rowDatas = 12;
+
+    // ddl/query的schemaName，会存在跨库ddl，需要保留执行ddl的当前schemaName
+    string ddlSchemaName = 13;
+
+    // 预留扩展
+    repeated Pair props = 14;
+}
+
+// 开始事务的一些信息
+message TransactionBegin {
+    // 执行的thread Id
+    int64 threadId = 1;
+    // 预留扩展
+    repeated Pair props = 2;
+}
+
+// 结束事务的一些信息
+message TransactionEnd {
+
+    // 事务号
+    string transactionId = 1;
+
+    // 预留扩展
+    repeated Pair props = 2;
+}
+
+// 预留扩展
+message Pair {
+    string key = 1;
+    string value = 2;
+}
+
+// 标识事务的开始，变更数据，结束的事件类型
+enum EntryType {
+    TRANSACTION_BEGIN = 0;
+    ROWDATA = 1;
+    TRANSACTION_END = 2;
+    // 心跳类型，内部使用，外部暂不可见
+    HEARTBEAT = 3;
+}
+
+// 事件类型
+enum EventType {
+    INSERT = 0;
+    UPDATE = 1;
+    DELETE = 2;
+    CREATE = 3;
+    ALTER = 4;
+    DROP = 5;
+    QUERY = 6;
+    TRUNCATE = 7;
+    RENAME = 8;
+    // CREATE INDEX
+    CINDEX = 9;
+    DINDEX = 10;
+}
+
+// 数据库类型
+enum Type {
+    ORACLE = 0;
+    MYSQL = 1;
+    PGSQL = 2;
+}

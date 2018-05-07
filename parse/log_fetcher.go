@@ -1,128 +1,66 @@
 package parse
 
-import "fmt"
 import (
-	"context"
-	log "github.com/golang/glog"
-	"github.com/juju/errors"
+	"github.com/golang/glog"
 	. "github.com/woqutech/drt/tools"
-	"sync"
+	. "github.com/woqutech/drt/events"
+	"github.com/pkg/errors"
 	"time"
 )
 
 type LogFetcher struct {
 	conn    *MySQLConnection
 	decoder *LogDecoder
-
-	m      sync.RWMutex
-	wg     sync.WaitGroup
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	running bool
 }
 
 func NewLogFetcher(conn *MySQLConnection, ld *LogDecoder) *LogFetcher {
 	lf := new(LogFetcher)
 	lf.conn = conn
 	lf.decoder = ld
-	lf.running = true
 	return lf
 }
 
-func (lf *LogFetcher) Fetch() *EventStreamer {
-	log.Infof("start fetch binlog with slave id %d", lf.conn.slaveId)
-
-	streamer := NewStreamer()
-
-	lf.wg.Add(1)
-	go lf.fetch(streamer)
-	return streamer
-}
-
-func (lf *LogFetcher) fetch(streamer *EventStreamer) {
-	defer func() {
-		if e := recover(); e != nil {
-			streamer.closeWithError(fmt.Errorf("Err: %v\n Stack: %s", e, PStack()))
-		}
-		lf.wg.Done()
-	}()
-
-	for {
-		//set read timeout
-		//if lf.conn.auth.ReadTimeout > 0 {
-		//	lf.conn.SetReadDeadline(time.Now().Add(time.Second * 10))
-		//}
-		data, err := lf.conn.ReadPacket()
+func (lf *LogFetcher) Fetch() (*LogEvent, error) {
+	data, err := lf.conn.ReadPacket()
+	if err != nil {
+		errLog.Print(err)
+		return nil, err
+	}
+	switch data[0] {
+	case OK_HEADER:
+		// skip ok
+		event, err := lf.decoder.Decode(data[1:])
 		if err != nil {
-			errLog.Print(err)
-			streamer.closeWithError(err)
-			return
+			return nil, err
 		}
-		//if lf.conn.auth.ReadTimeout > 0 {
-		//	lf.conn.SetReadDeadline(time.Time{})
-		//}
-		switch data[0] {
-		case OK_HEADER:
-			// skip ok
-			event, err := lf.decoder.Decode(data[1:])
-			if err != nil {
-				streamer.closeWithError(err)
-				return
-			}
-			select {
-			case streamer.ch <- event:
-			case <-lf.ctx.Done():
-				streamer.closeWithError(errors.New("log fetch has been closed"))
-			}
-		case ERR_HEADER:
-			err = lf.conn.HandleERRPacket(data)
-			streamer.closeWithError(err)
-			return
-		case EOF_HEADER:
-			log.Info("receive EOF packet, retry ReadPacket")
-			continue
-		default:
-			log.Errorf("invalid stream header %c", data[0])
-			continue
-		}
+		return event, nil
+	case ERR_HEADER:
+		err = lf.conn.HandleERRPacket(data)
+		return nil, err
+	case EOF_HEADER:
+		glog.Info("receive EOF packet, retry ReadPacket")
+		return nil, nil
+	default:
+		// should not happen
+		glog.Errorf("invalid event header %c", data[0])
+		return nil, errors.New("invalid event header")
 	}
-
 }
 
-// Close the LogFetcher.
-func (lf *LogFetcher) Close() {
-	lf.m.Lock()
-	defer lf.m.Unlock()
-
-	lf.close()
+// Close the LogSteamer.
+func (lf *LogFetcher) Close() error {
+	return lf.close()
 }
 
-func (lf *LogFetcher) close() {
-	log.Info("log fetcher start to closing")
-	if lf.isClosed() {
-		return
-	}
-
-	lf.running = false
-	lf.cancel()
+func (lf *LogFetcher) close() error {
+	glog.Info("log fetcher start to closing")
 
 	if lf.conn != nil {
 		lf.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 	}
 
-	lf.wg.Wait()
-
 	if lf.conn != nil {
-		lf.conn.Close()
+		return lf.conn.Close()
 	}
-}
-
-func (lf *LogFetcher) isClosed() bool {
-	select {
-	case <-lf.ctx.Done():
-		return true
-	default:
-		return false
-	}
+	return nil
 }

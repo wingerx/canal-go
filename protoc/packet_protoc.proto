@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package protoc;
+
+enum Compression {
+    NONE = 0;
+    ZLIB = 1;
+    GZIP = 2;
+    LZF = 3;
+}
+
+enum PacketType {
+    UNKNOWN = 0;
+    HANDSHAKE = 1;
+    CLIENTAUTHENTICATION = 2;
+    ACK = 3;
+    SUBSCRIPTION = 4;
+    UNSUBSCRIPTION = 5;
+    GET = 6;
+    MESSAGES = 7;
+    CLIENTACK = 8;
+    HEARTBEAT = 9;
+    CLIENTROLLBACK = 10;
+}
+
+message Packet {
+    int32 magic_number = 1;
+    int32 version = 2;
+    PacketType type = 3;
+    Compression compression = 4;
+    bytes body = 5;
+}
+
+message HeartBeat {
+    int64 send_timestamp = 1;
+    int64 start_timestamp = 2;
+}
+
+message Handshake {
+    string communication_encoding = 1;
+    bytes seeds = 2;
+    repeated Compression supported_compressions = 3;
+}
+
+// client authentication
+message ClientAuth {
+    string username = 1;
+    bytes password = 2; // hashed password with seeds from Handshake message
+    int32 net_read_timeout = 3; // in seconds
+    int32 net_write_timeout = 4; // in seconds
+    string destination = 5;
+    string client_id = 6;
+    string filter = 7;
+    int64 start_timestamp = 8;
+}
+
+message Ack {
+    int32 error_code = 1;
+    string error_message = 2; // if something like compression is not supported, erorr_message will tell about it.
+}
+
+message ClientAck {
+    string destination = 1;
+    string client_id = 2;
+    int64 batch_id = 3;
+}
+
+// subscription
+message Sub {
+    string destination = 1;
+    string client_id = 2;
+    string filter = 7;
+}
+
+// Unsubscription
+message Unsub {
+    string destination = 1;
+    string client_id = 2;
+    string filter = 7;
+}
+
+//  PullRequest
+message Get {
+    string destination = 1;
+    string client_id = 2;
+    int32 fetch_size = 3;
+    int64 timeout = 4; // 默认-1时代表不控制
+    int32 unit = 5; // 数字类型，0:纳秒,1:毫秒,2:微秒,3:秒,4:分钟,5:小时,6:天
+    bool auto_ack = 6; // 是否自动ack
+}
+
+//
+message Messages {
+    int64 batch_id = 1;
+    repeated bytes messages = 2;
+}
+
+message ClientRollback {
+    string destination = 1;
+    string client_id = 2;
+    int64 batch_id = 3;
+}

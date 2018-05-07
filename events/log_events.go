@@ -2,6 +2,7 @@ package events
 
 import (
 	"encoding/binary"
+	"fmt"
 	"github.com/juju/errors"
 	. "github.com/woqutech/drt/tools"
 	"io"
@@ -132,7 +133,7 @@ func NewXidEvent(data []byte) (Event, error) {
 
 // The query event is used to send text queries the correct binlog.
 type QueryEvent struct {
-	SlaveID       uint32
+	ThreadId      uint32
 	ExecutionTime uint32
 	ErrorCode     uint16
 	StatusVars    []byte
@@ -166,7 +167,7 @@ func NewQueryLogEvent(data []byte) (Event, error) {
 	offset := 0
 
 	// Slave ID (4 bytes)
-	event.SlaveID = binary.LittleEndian.Uint32(data[offset : offset+4])
+	event.ThreadId = binary.LittleEndian.Uint32(data[offset : offset+4])
 	offset += 4
 
 	// Execution time (4 bytes)
@@ -610,4 +611,54 @@ type HeartbeatLogEvent struct {
 
 func NewHeartbeatLogEvent(data []byte) (Event, error) {
 	return &HeartbeatLogEvent{data}, nil
+}
+
+type RandLogEvent struct {
+	Query string
+}
+
+func NewRandLogEvent(data []byte) (Event, error) {
+	event := new(RandLogEvent)
+	offset := 0
+	seed1 := data[offset]
+	offset++
+	seed2 := data[offset]
+	event.Query = fmt.Sprintf("SET SESSION rand_seed1 = %v , rand_seed2 = %v", seed1, seed2)
+	return event, nil
+}
+
+// Expected format (L = total length of event data):
+//   # bytes   field
+//   1         flags
+//   16        SID length
+//	 8	   	   GNO length
+//	 1	   	   length of type code
+//	 16(8+8)   length of two logical timestamps
+type GTIDEvent struct {
+	CommitFlag     uint8
+	SID            []byte
+	GNO            int64
+	LastCommitted  int64
+	SequenceNumber int64
+}
+
+func NewGTIDEvent(data []byte) (Event, error) {
+	event := new(GTIDEvent)
+	offset := 0
+	event.CommitFlag = uint8(data[offset])
+	offset++
+	event.SID = data[offset : offset+ENCODED_SID_LENGTH]
+	offset += ENCODED_SID_LENGTH
+	event.GNO = int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
+	offset += 8
+
+	if len(data) >= 42 { // 1+16+8+1+8+8
+		if uint8(data[offset]) == LOGICAL_TIMESTAMP_TYPECODE {
+			offset++
+			event.LastCommitted = int64(binary.LittleEndian.Uint64(data[offset : offset+PART_LOGICAL_TIMESTAMP_TYPECODE_LENGTH]))
+			offset += PART_LOGICAL_TIMESTAMP_TYPECODE_LENGTH
+			event.SequenceNumber = int64(binary.LittleEndian.Uint64(data[offset : offset+PART_LOGICAL_TIMESTAMP_TYPECODE_LENGTH]))
+		}
+	}
+	return event, nil
 }

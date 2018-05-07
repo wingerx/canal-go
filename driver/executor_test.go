@@ -2,16 +2,14 @@ package driver
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"testing"
 )
 
 func TestExecutor_Query(t *testing.T) {
 	// 正常连接，无默认db
-	ctx := context.Background()
 	mc := NewMySQLConnector("127.0.0.1:3306", "root", "123456", "example")
-	err := mc.Connect(ctx)
+	err := mc.Connect()
 	defer mc.Close()
 	if err != nil {
 		fmt.Println(err)
@@ -42,7 +40,7 @@ func TestExecutor_Query(t *testing.T) {
 		}
 
 		for _, t := range tables {
-			buffer.WriteString(fmt.Sprintf("show create table `%v`.`%v`;", s, t))
+			buffer.WriteString(fmt.Sprintf("show full columns from `%v`.`%v`;", s, t))
 		}
 	}
 
@@ -57,7 +55,12 @@ func TestExecutor_Query(t *testing.T) {
 
 	for _, items := range multi {
 		for idx := range items.Values {
+			fmt.Println(items.GetString(idx, 0))
 			fmt.Println(items.GetString(idx, 1))
+			fmt.Println(items.GetString(idx, 2))
+			fmt.Println(items.GetString(idx, 3))
+			fmt.Println(items.GetString(idx, 4))
+			fmt.Println(items.GetString(idx, 6))
 		}
 	}
 

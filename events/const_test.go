@@ -6,7 +6,7 @@ import (
 )
 
 type eventTypeToStringTest struct {
-	input EventType
+	input LogEventType
 	want  string
 }
 

@@ -1,7 +1,6 @@
 package parse
 
 import (
-	"context"
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -18,7 +17,7 @@ type AuthenticInfo struct {
 	dbName      string
 	charset     string
 	connTimeout int
-	ReadTimeout int
+	readTimeout int
 }
 
 type MySQLConnection struct {
@@ -26,9 +25,6 @@ type MySQLConnection struct {
 	auth *AuthenticInfo
 
 	slaveId uint32
-	cancel  context.CancelFunc
-	ctx     context.Context
-	//wg      sync.WaitGroup
 }
 
 type SinkFunction func(event *LogEvent) bool
@@ -43,39 +39,35 @@ func NewMySQLConnection(auth *AuthenticInfo, slaveId uint32) *MySQLConnection {
 	mc.MySQLConnector = conn
 	mc.auth = auth
 	mc.slaveId = slaveId
-	mc.ctx, mc.cancel = context.WithCancel(context.Background())
 
 	return mc
 }
 
 func (mc *MySQLConnection) Connect() error {
-	return mc.MySQLConnector.Connect(mc.ctx)
+	return mc.MySQLConnector.Connect()
 }
 
-func (mc *MySQLConnection) dump(binlogName string, position uint32, sinkFunc SinkFunction) error {
-	ld := NewDumpAllEventLogDecoder()
-	lf := NewLogFetcher(mc, ld)
-	return mc.fetchEvent(binlogName, position, lf, sinkFunc)
+func (mc *MySQLConnection) Dump(binlogName string, position uint32, sinkFunc SinkFunction) error {
+	decoder := NewDumpEventLogDecoder()
+	return mc.fetchEvent(binlogName, position, decoder, sinkFunc)
 }
 
-func (mc *MySQLConnection) sink(binlogName string, position uint32, sinkFunc SinkFunction) error {
-	ld := NewSinkEventLogDecoder()
-	lf := NewLogFetcher(mc, ld)
-	return mc.fetchEvent(binlogName, position, lf, sinkFunc)
+func (mc *MySQLConnection) Sink(binlogName string, position uint32, sinkFunc SinkFunction) error {
+	decoder := NewSinkEventLogDecoder()
+	return mc.fetchEvent(binlogName, position, decoder, sinkFunc)
 }
 
-func (mc *MySQLConnection) fetchEvent(binlogName string, position uint32, lf *LogFetcher, sinkFunc SinkFunction) error {
+func (mc *MySQLConnection) fetchEvent(binlogName string, position uint32, decoder *LogDecoder, sinkFunc SinkFunction) error {
+	fetcher := NewLogSteamer(mc, decoder)
 	mc.updateSettings()
 	// ignore err
 	mc.sendRegisterSlave()
-	// send binlog dump cmd
+	// send binlog Dump cmd
 	mc.sendBinlogDumpCommand(binlogName, position)
-	// dump & parse event
-	lf.ctx, lf.cancel = mc.ctx, mc.cancel
-
-	streamer := lf.Fetch()
+	// Dump & parse event
+	streamer := fetcher.Fetch()
 	for {
-		event, err := streamer.GetEvent(lf.ctx)
+		event, err := streamer.GetEvent()
 
 		if err != nil {
 			return errors.Trace(err)
@@ -91,7 +83,7 @@ func (mc *MySQLConnection) fetchEvent(binlogName string, position uint32, lf *Lo
 // See http://dev.mysql.com/doc/internals/en/com-binlog-dump.html for syntax
 // Returns a SQLError.
 func (mc *MySQLConnection) sendBinlogDumpCommand(binlogName string, position uint32) error {
-	glog.Infof("binlog dump with position [%s:%d]", binlogName, position)
+	glog.Infof("binlog Dump with position [%s:%d]", binlogName, position)
 	return mc.WriteBinlogDumpPacket(binlogName, mc.slaveId, position)
 }
 
@@ -99,6 +91,7 @@ func (mc *MySQLConnection) sendRegisterSlave() error {
 	glog.Infof("register slave with id [%d]", mc.slaveId)
 	return mc.WriteRegisterSlavePacket(mc.slaveId)
 }
+
 func (mc *MySQLConnection) updateSettings() {
 	// Tell the server that we understand the format of events
 	// that will be used if binlog_checksum is enabled on the server.
@@ -165,17 +158,16 @@ func fork(auth *AuthenticInfo, slaveId uint32) *MySQLConnection {
 
 func (mc *MySQLConnection) Disconnect() error {
 	glog.Infof("try to disconnect %v", fmt.Sprintf("%v:%d", mc.auth.host, mc.auth.port))
-	mc.cancel()
 	err := mc.MySQLConnector.Close()
 	if mc.ConnectionId() > 0 {
-		glog.Infof("kill dump connectionId: %d", mc.ConnectionId())
-		kc := fork(mc.auth, mc.slaveId)
-		err := kc.Connect()
+		glog.Infof("kill Dump connectionId: %d", mc.ConnectionId())
+		fc := fork(mc.auth, mc.slaveId)
+		err := fc.Connect()
 		if err != nil {
 			glog.Errorf("fork connection failed.%v", err)
 		}
-		kc.Update(fmt.Sprintf("KILL CONNECTION %d", mc.ConnectionId()))
-		kc.Close()
+		fc.Update(fmt.Sprintf("KILL CONNECTION %d", mc.ConnectionId()))
+		fc.Close()
 	}
 	return err
 }

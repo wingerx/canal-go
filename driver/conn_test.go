@@ -1,7 +1,6 @@
 package driver
 
 import (
-	"context"
 	"flag"
 	"github.com/stretchr/testify/assert"
 	"os"
@@ -21,9 +20,8 @@ func TestMain(m *testing.M) {
 func TestMySQLConnector_Connect(t *testing.T) {
 	var out = ""
 	// 正常连接，无默认db
-	ctx := context.Background()
 	mc := NewMySQLConnector("127.0.0.1:3306", "root", "123456", "")
-	err := mc.Connect(ctx)
+	err := mc.Connect()
 	if err != nil {
 		out = err.Error()
 	}
@@ -33,7 +31,7 @@ func TestMySQLConnector_Connect(t *testing.T) {
 	// 错误密码
 	mc.password = "wrong password"
 	want := "ErrorPacket [errorCode=1045, message='Access denied for user 'root'@'172.17.0.1' (using password: YES)', sqlState=28000]"
-	err = mc.Connect(ctx)
+	err = mc.Connect()
 	if err != nil {
 		out = err.Error()
 	}
@@ -45,7 +43,7 @@ func TestMySQLConnector_Connect(t *testing.T) {
 	mc.dbname = "notexistdb"
 	want = "ErrorPacket [errorCode=1049, message='Unknown database 'notexistdb'', sqlState=42000]"
 	out = ""
-	err = mc.Connect(ctx)
+	err = mc.Connect()
 	if err != nil {
 		out = err.Error()
 	}
@@ -55,7 +53,7 @@ func TestMySQLConnector_Connect(t *testing.T) {
 	// 正确数据库名
 	mc.dbname = "mysql"
 	out = ""
-	err = mc.Connect(ctx)
+	err = mc.Connect()
 	if err != nil {
 		out = err.Error()
 	}

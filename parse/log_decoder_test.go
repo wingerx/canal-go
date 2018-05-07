@@ -49,9 +49,9 @@ func TestLogDecoder_Decode(t *testing.T) {
 	event, err := ld.Decode(re)
 	ld.Decode(fe)
 	ld.Decode(qe)
-	ld.Decode(we)
 
 	event, err = ld.Decode(te)
+	event, err = ld.Decode(we)
 	if err != nil {
 		glog.Error(err)
 	}
@@ -61,6 +61,10 @@ func TestLogDecoder_Decode(t *testing.T) {
 		glog.Infof("tID:%d, dbName: %s,tName: %s ", e.TableID, string(e.DatabaseName), string(e.TableName))
 		for _, col := range e.ColumnTypes {
 			glog.Infof("%v", col)
+		}
+	case *RowsEvent:
+		for r1, r2 := range e.Rows {
+			glog.Info(r1, r2)
 		}
 	}
 }

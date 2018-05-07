@@ -42,7 +42,7 @@ type RowsEvent struct {
 //     Each row image is composed of:
 //       bit field indicating whether each field in the row is NULL.
 //       list of non-NULL encoded values.
-func NewRowsEvent(format *FormatDescriptionEvent, tables map[uint64]*TableMapEvent, eventType EventType, data []byte) (Event, error) {
+func NewRowsEvent(format *FormatDescriptionEvent, tables map[uint64]*TableMapEvent, eventType LogEventType, data []byte) (Event, error) {
 
 	var tableIDSize = 6
 	if format.EventTypeHeaderLengths[TABLE_MAP_EVENT-1] == 6 {

@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+const UTF8 = "UTF8"
+
 type binlogFormatImage []string
 
 func (bfi binlogFormatImage) contains(p string) bool {

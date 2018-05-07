@@ -6,7 +6,7 @@ import (
 )
 
 type LogDecoder struct {
-	handleSet map[EventType]bool
+	handleSet map[LogEventType]bool
 
 	format *FormatDescriptionEvent
 	tables map[uint64]*TableMapEvent
@@ -16,10 +16,10 @@ func NewEmptyLogDecoder() *LogDecoder {
 	ld := new(LogDecoder)
 	ld.tables = make(map[uint64]*TableMapEvent)
 	ld.format = NewFormatDescriptionEventV4()
-	ld.handleSet = make(map[EventType]bool)
+	ld.handleSet = make(map[LogEventType]bool)
 	return ld
 }
-func NewLogDecoder(from, to EventType) *LogDecoder {
+func NewLogDecoder(from, to LogEventType) *LogDecoder {
 	ld := new(LogDecoder)
 	ld.tables = make(map[uint64]*TableMapEvent)
 	ld.format = NewFormatDescriptionEventV4()
@@ -27,8 +27,8 @@ func NewLogDecoder(from, to EventType) *LogDecoder {
 	return ld
 }
 
-func NewDumpAllEventLogDecoder() *LogDecoder {
-	return NewLogDecoder(UNKNOWN_EVENT, PREVIOUS_GTIDS_LOG_EVENT)
+func NewDumpEventLogDecoder() *LogDecoder {
+	return NewLogDecoder(UNKNOWN_EVENT, ENUM_END_EVENT)
 }
 
 func NewSinkEventLogDecoder() *LogDecoder {
@@ -40,14 +40,14 @@ func NewSinkEventLogDecoder() *LogDecoder {
 	return ld
 }
 
-func (ld *LogDecoder) initHandleSet(from, to EventType) {
-	ld.handleSet = make(map[EventType]bool)
+func (ld *LogDecoder) initHandleSet(from, to LogEventType) {
+	ld.handleSet = make(map[LogEventType]bool)
 	for i := from; i <= to; i++ {
 		ld.handleSet[i] = true
 	}
 }
 
-func (ld *LogDecoder) handle(flag EventType) {
+func (ld *LogDecoder) handle(flag LogEventType) {
 	ld.handleSet[flag] = true
 }
 
@@ -77,8 +77,6 @@ func (ld *LogDecoder) Decode(data []byte) (*LogEvent, error) {
 }
 
 func (ld *LogDecoder) decode(header *EventHeader, data []byte) (event Event, err error) {
-	//var event Event
-	//var err error
 	if header.Type != FORMAT_DESCRIPTION_EVENT {
 		// remove checksum bytes
 		if ld.format.ChecksumAlgorithm != BINLOG_CHECKSUM_ALG_OFF && ld.format.ChecksumAlgorithm != BINLOG_CHECKSUM_ALG_UNDEF {
@@ -87,6 +85,8 @@ func (ld *LogDecoder) decode(header *EventHeader, data []byte) (event Event, err
 	}
 
 	switch header.Type {
+	case GTID_LOG_EVENT, ANONYMOUS_GTID_LOG_EVENT:
+		event, err = NewGTIDEvent(data)
 	case QUERY_EVENT:
 		event, err = NewQueryLogEvent(data)
 	case XID_EVENT:
@@ -122,6 +122,8 @@ func (ld *LogDecoder) decode(header *EventHeader, data []byte) (event Event, err
 		event, err = NewIntVarEvent(data)
 	case HEARTBEAT_EVENT:
 		event, err = NewHeartbeatLogEvent(data)
+	case RAND_EVENT:
+		event, err = NewRandLogEvent(data)
 	default:
 		event, err = NewUnNamedLogEvent(data)
 	}

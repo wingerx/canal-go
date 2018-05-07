@@ -31,7 +31,7 @@ func (e *EventError) Error() string {
 
 type EventHeader struct {
 	Timestamp uint32
-	Type      EventType
+	Type      LogEventType
 	ServerId  uint32
 	EventSize uint32
 	LogPos    uint32
@@ -54,7 +54,7 @@ func NewEventHeader(data []byte) (*EventHeader, error) {
 	offset += 4
 
 	// MySQL-defined binlog event type
-	header.Type = EventType(data[offset])
+	header.Type = LogEventType(data[offset])
 	offset++
 
 	// ID of the originating MySQL server; used to filter out events in circular replication

@@ -20,6 +20,10 @@ type ResultSet struct {
 	RowDatas   []RowData
 }
 
+func (r *ResultSet) RowNumber() int {
+	return len(r.Values)
+}
+
 type RowData []byte
 
 func (r *ResultSet) GetString(row, column int) (string, error) {

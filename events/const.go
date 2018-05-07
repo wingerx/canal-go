@@ -12,10 +12,10 @@ const (
 )
 
 // Binlog events
-type EventType byte
+type LogEventType byte
 
 const (
-	UNKNOWN_EVENT            EventType = iota // 0x00
+	UNKNOWN_EVENT            LogEventType = iota // 0x00
 	START_EVENT_V3
 	QUERY_EVENT
 	STOP_EVENT
@@ -56,7 +56,7 @@ const (
 	ENUM_END_EVENT
 )
 
-func (e EventType) String() string {
+func (e LogEventType) String() string {
 	switch e {
 	case UNKNOWN_EVENT:
 		return "UnknownEvent"
@@ -171,6 +171,12 @@ const (
 	GTID_LIST_HEADER_LEN                = 4
 	POST_HEADER_LENGTH                  = 11
 	BINLOG_CHECKSUM_ALG_DESC_LEN        = 1
+)
+
+const (
+	ENCODED_SID_LENGTH                     = 16
+	LOGICAL_TIMESTAMP_TYPECODE             = 2
+	PART_LOGICAL_TIMESTAMP_TYPECODE_LENGTH = 8
 )
 
 // Flags

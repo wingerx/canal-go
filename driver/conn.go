@@ -2,7 +2,6 @@ package driver
 
 import (
 	"bufio"
-	"context"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	. "github.com/woqutech/drt/tools"
@@ -49,6 +48,7 @@ type MySQLConnector struct {
 	charset     string
 	dbname      string
 	connTimeout time.Duration
+	readTimeout time.Duration
 	connected   AtomicBool
 
 	//handshake packet
@@ -74,7 +74,7 @@ func NewMySQLConnector(address, username, password, dbName string) *MySQLConnect
 // - a connectChan with an error and nothing else (when dial fails).
 // - a connectChan with a *Conn and no error, then another one
 //   with possibly an error.
-func (mc *MySQLConnector) Connect(ctx context.Context) error {
+func (mc *MySQLConnector) Connect() error {
 	glog.Infof("start to connect [%v %s]", mc.address, mc.dbname)
 	status := make(chan connectChan)
 	go func() {
@@ -106,22 +106,22 @@ func (mc *MySQLConnector) Connect(ctx context.Context) error {
 
 	// Wait on the context and the status, for the connection to happen.
 	select {
-	case <-ctx.Done():
-		// The background routine may send us a few things,
-		// wait for them and terminate them properly in the
-		// background.
-		go func() {
-			dial := <-status
-			if dial.err != nil {
-				// return nothing if dial failed
-				return
-			}
-			// if dial worked, close the connection, wait for the end.
-			// We wait as not to leave a channel with an unread value.
-			dial.conn.Close()
-			<-status
-		}()
-		return ctx.Err()
+	//case <-ctx.Done():
+	//	// The background routine may send us a few things,
+	//	// wait for them and terminate them properly in the
+	//	// background.
+	//	go func() {
+	//		dial := <-status
+	//		if dial.err != nil {
+	//			// return nothing if dial failed
+	//			return
+	//		}
+	//		// if dial worked, close the connection, wait for the end.
+	//		// We wait as not to leave a channel with an unread value.
+	//		dial.conn.Close()
+	//		<-status
+	//	}()
+	//	return ctx.Err()
 	case cr := <-status:
 		// Dial failed, no connection was established.
 		if cr.err != nil {
@@ -133,18 +133,19 @@ func (mc *MySQLConnector) Connect(ctx context.Context) error {
 
 	// Wait for the end of the handshake
 	select {
-	case <-ctx.Done():
-		// We are interrupted. Close the connection, wait for
-		// the handshake to finish in the background.
-		mc.Close()
-		go func() {
-			// Since we closed the connection, this one should be fast.
-			// We wait as not to leave a channel with an unread value.
-			<-status
-		}()
-		return ctx.Err()
+	//case <-ctx.Done():
+	//	// We are interrupted. Close the connection, wait for
+	//	// the handshake to finish in the background.
+	//	mc.Close()
+	//	go func() {
+	//		// Since we closed the connection, this one should be fast.
+	//		// We wait as not to leave a channel with an unread value.
+	//		<-status
+	//	}()
+	//	return ctx.Err()
 	case cr := <-status:
 		if cr.err != nil {
+			glog.Errorf("connect [%v] error, err message: [%v]", mc.address, cr.err.Error())
 			mc.Close()
 			return cr.err
 		}
@@ -328,6 +329,10 @@ func (c *Conn) close() error {
 
 func (mc *MySQLConnector) SetConnTimeout(timeout int) {
 	mc.connTimeout = time.Second * time.Duration(timeout)
+}
+
+func (mc *MySQLConnector) SetReadTimeout(timeout int) {
+	mc.readTimeout = time.Second * time.Duration(timeout)
 }
 
 func (mc *MySQLConnector) SetCharSet(charset string) {
