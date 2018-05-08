@@ -199,7 +199,3 @@ func (dsp *DdlSQLParser) Parse(dbName string) ([]*DdlParserResult, error) {
 
 	return ddlResults, nil
 }
-
-func (dsp *DdlSQLParser) processName(dbName string) {
-
-}

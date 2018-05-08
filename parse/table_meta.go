@@ -91,7 +91,7 @@ func (tmc *TableMetaCache) RestoreOneTableMeta(schema string, table string) erro
 
 func (tmc *TableMetaCache) GetOneTableMeta(schema string, table string) *TableMeta {
 	tmc.lock.RLock()
-	defer tmc.lock.Unlock()
+	defer tmc.lock.RUnlock()
 	return tmc.cache.tableMetas[fmt.Sprintf("%s.%s", schema, table)]
 }
 
