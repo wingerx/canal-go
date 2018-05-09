@@ -69,7 +69,7 @@ message Column {
     // 字段类型
     int32 sqlType = 2;
 
-    // 字段名称(忽略大小写)，在mysql中是没有的
+    // 字段名称
     string name = 3;
 
     // 是否是主键
@@ -81,17 +81,14 @@ message Column {
     // 标识是否为空
     bool isNull = 6;
 
-    // 字段值,timestamp,Datetime是一个时间格式的文本
+    // 字段值
     string value = 7;
 
-    // 对应数据对象原始长度
-    int32 length = 8;
-
     // 字段mysql类型
-    string mysqlType = 9;
+    string mysqlType = 8;
 
     // 预留扩展
-    repeated Pair props = 10;
+    repeated Pair props = 9;
 
 
 }
@@ -126,7 +123,7 @@ message RowChange {
     // 一次数据库变更可能存在多行
     repeated RowData rowDatas = 12;
 
-    // ddl/query的schemaName，会存在跨库ddl，需要保留执行ddl的当前schemaName
+    // ddl/query的schemaName
     string ddlSchemaName = 13;
 
     // 预留扩展

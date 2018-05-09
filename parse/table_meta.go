@@ -7,6 +7,7 @@ import (
 	"github.com/golang/glog"
 	"sync"
 	"encoding/json"
+	"github.com/woqutech/drt/protoc"
 )
 
 const (
@@ -38,11 +39,13 @@ type TableMetaCache struct {
 	cache *MemoryTableMeta
 }
 
-func NewTableMetaCache(destination string, conn *MySQLConnection) (*TableMetaCache, error) {
+func NewTableMetaCache(conn *MySQLConnection) (*TableMetaCache, error) {
 	tmc := new(TableMetaCache)
 	tmc.conn = conn
-	tmc.destination = destination
-	tmc.initAllTableMetaViaDB()
+	if err := tmc.initAllTableMetaViaDB(); err != nil {
+		return nil, err
+	}
+
 	return tmc, nil
 }
 
@@ -93,6 +96,19 @@ func (tmc *TableMetaCache) GetOneTableMeta(schema string, table string) *TableMe
 	tmc.lock.RLock()
 	defer tmc.lock.RUnlock()
 	return tmc.cache.tableMetas[fmt.Sprintf("%s.%s", schema, table)]
+}
+
+func (tmc *TableMetaCache) GetOneTableMetaViaTSDB(schema, table string, position *protoc.EntryPosition) *TableMeta {
+	// cache -> tsdb -> 目标db
+	tm := tmc.GetOneTableMeta(schema, table)
+	if tm == nil {
+		// TODO 通过 position 从 TSDB 数据库中获取
+
+		// 从目标端中重新获取
+		tmc.RestoreOneTableMeta(schema, table)
+		tm = tmc.GetOneTableMeta(schema, table)
+	}
+	return tm
 }
 
 func (tmc *TableMetaCache) checkTableExistViaDB(schema string, name string) (bool, error) {
@@ -409,7 +425,7 @@ func (tbl *TableMeta) addTableColumn(name string, columnType string, collation s
 		tbl.Columns[index].Type = TYPE_BIT
 	} else if strings.HasPrefix(columnType, "json") {
 		tbl.Columns[index].Type = TYPE_JSON
-	} else if strings.Contains(columnType, "int") || strings.HasPrefix(columnType, "year") {
+	} else if strings.Contains(columnType, "int") { //|| strings.HasPrefix(columnType, "year")
 		tbl.Columns[index].Type = TYPE_NUMBER
 	} else {
 		tbl.Columns[index].Type = TYPE_STRING
@@ -451,6 +467,23 @@ func (tbl *TableMeta) findTableColumn(i int) *TableColumn {
 		return nil
 	}
 	return tbl.Columns[i]
+}
+
+func (tbl *TableMeta) isPKColumn(colName string) bool {
+	if len(colName) <= 0 || len(tbl.Indexes) <= 0 {
+		return false
+	}
+	for _, val := range tbl.Indexes {
+		if len(val.Columns) <= 0 {
+			continue
+		}
+		for _, v := range val.Columns {
+			if strings.EqualFold(colName, v) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 type TableMetaTSDB struct {

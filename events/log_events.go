@@ -538,7 +538,7 @@ type UserVarLogEvent struct {
 	Type        uint8
 	Charset     uint32
 	ValueLength uint32
-	Value       []byte
+	Value       interface{}
 
 	Query string
 }
@@ -580,14 +580,43 @@ func NewUserVarLogEvent(data []byte) (Event, error) {
 		event.ValueLength = binary.LittleEndian.Uint32(data[offset : offset+4])
 		offset += 4
 
-		event.Value = data[offset:event.ValueLength]
+		switch event.Type {
+		case 0: // string
+			event.Value = data[offset : offset+int(event.ValueLength)]
+			event.Query = fmt.Sprintf("SET @%s := '%s'", event.Name, string(data[offset:offset+int(event.ValueLength)]))
+		case 1: // float
+			event.Value = binary.LittleEndian.Uint64(data[offset : offset+8])
+			event.Query = fmt.Sprintf("SET @%s := %f", event.Name, event.Value)
+		case 2: // int
+			if event.ValueLength == 4 {
+				event.Value = binary.LittleEndian.Uint32(data[offset : offset+4])
+				event.Query = fmt.Sprintf("SET @%s := %d", event.Name, event.Value)
+			} else if event.ValueLength == 8 {
+				event.Value = binary.LittleEndian.Uint64(data[offset : offset+8])
+				event.Query = fmt.Sprintf("SET @%s := %d", event.Name, event.Value)
+			}
+			//case 4: // decimal
+		default:
+			event.Value = nil
+		}
+	} else {
+		event.Type = 0
+		event.Charset = 63 //binary
+		event.Value = nil
 	}
+
+	if event.Value == nil {
+		event.Query = fmt.Sprintf("SET @%s := NULL", event.Name)
+	}
+
 	return event, nil
 }
 
 type IntVarEvent struct {
 	Type  byte
 	Value uint64
+
+	Query string
 }
 
 // Expected format (L = total length of event data):
@@ -602,6 +631,8 @@ func NewIntVarEvent(data []byte) (Event, error) {
 	}
 
 	event.Value = binary.LittleEndian.Uint64(data[1 : 1+8])
+
+	event.Query = fmt.Sprintf("SET INSERT_ID = %d", event.Value)
 	return event, nil
 }
 

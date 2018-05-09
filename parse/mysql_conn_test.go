@@ -20,13 +20,12 @@ func TestNewMySQLConnection(t *testing.T) {
 
 	mc := NewMySQLConnection(auth, 123456)
 
-	err := mc.Connect()
-	if err != nil {
+	if err := mc.Connect(); err != nil {
 		glog.Error(err)
 		return
 	}
 
-	err = mc.Dump("mysql-bin.000017", 194, func(event *LogEvent) bool {
+	err := mc.Dump("mysql-bin.000017", 194, func(event *LogEvent) bool {
 		glog.Infof("event type: %v, pos: %v, offset: %v", event.Header.Type, event.Header.LogPos, int32(event.Header.LogPos-event.Header.EventSize))
 		parse(event)
 		return true
@@ -53,7 +52,7 @@ func parse(event *LogEvent) {
 		for i, r := range e.Rows {
 			if (i+1)%2 == 0 && event.Header.Type == UPDATE_ROWS_EVENT_V2 {
 				glog.Infof("after rows: %v", r)
-			}else {
+			} else {
 				glog.Infof("before rows: %v", r)
 			}
 

@@ -23,7 +23,7 @@ func TestNewTableMetaCache(t *testing.T) {
 		return
 	}
 
-	tmc, err := NewTableMetaCache("example", mc)
+	tmc, err := NewTableMetaCache(mc)
 	if err != nil {
 		glog.Error(errors.Trace(err))
 		return

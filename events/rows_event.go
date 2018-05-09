@@ -103,7 +103,7 @@ func NewRowsEvent(format *FormatDescriptionEvent, tables map[uint64]*TableMapEve
 		}
 		offset += n
 
-		if eventType == UPDATE_ROWS_EVENT_V1 {
+		if eventType == UPDATE_ROWS_EVENT_V1 || eventType == UPDATE_ROWS_EVENT_V2 {
 			if n, err = event.parseRows(data[offset:], event.Table, event.ColumnBitmap2); err != nil {
 				return nil, err
 			}
