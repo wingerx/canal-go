@@ -319,7 +319,7 @@ func (ec *EventConvert) parseOneRow(rowData *RowData, oneRow []interface{}, re *
 		} else {
 			newValue = column.Value
 		}
-		column.Updated = isUpdated(rowData.BeforeColumns, newValue, i)
+		column.Updated = isAfter && isUpdated(rowData.BeforeColumns, newValue, i)
 		if isAfter {
 			rowData.AfterColumns = append(rowData.AfterColumns, column)
 		} else {
