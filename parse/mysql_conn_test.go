@@ -2,7 +2,7 @@ package parse
 
 import (
 	"github.com/golang/glog"
-	. "github.com/woqutech/drt/events"
+	. "github.com/wingerx/drt/events"
 	"testing"
 	"github.com/satori/go.uuid"
 	"fmt"

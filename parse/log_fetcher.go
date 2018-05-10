@@ -2,8 +2,8 @@ package parse
 
 import (
 	"github.com/golang/glog"
-	. "github.com/woqutech/drt/tools"
-	. "github.com/woqutech/drt/events"
+	. "github.com/wingerx/drt/tools"
+	. "github.com/wingerx/drt/events"
 	"github.com/pkg/errors"
 	"time"
 )

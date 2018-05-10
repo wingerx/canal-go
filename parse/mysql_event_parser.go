@@ -1,7 +1,7 @@
 package parse
 
 import (
-	"github.com/woqutech/drt/protoc"
+	"github.com/wingerx/drt/protoc"
 	"github.com/toolkits/net"
 	"hash/crc32"
 	"strings"

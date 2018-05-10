@@ -7,7 +7,7 @@ import (
 	"github.com/golang/glog"
 	"sync"
 	"encoding/json"
-	"github.com/woqutech/drt/protoc"
+	"github.com/wingerx/drt/protoc"
 )
 
 const (

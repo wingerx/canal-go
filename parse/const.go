@@ -1,7 +1,7 @@
 package parse
 
 import (
-	. "github.com/woqutech/drt/tools"
+	. "github.com/wingerx/drt/tools"
 	"log"
 	"os"
 	"strings"

@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/golang/glog"
-	. "github.com/woqutech/drt/events"
+	. "github.com/wingerx/drt/events"
 	"os"
 	"testing"
 )

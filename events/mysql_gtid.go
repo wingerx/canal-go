@@ -9,7 +9,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/satori/go.uuid"
-	"github.com/woqutech/drt/tools"
+	"github.com/wingerx/drt/tools"
 )
 
 // Like MySQL GTID Interval struct, [start, stop), left closed and right open

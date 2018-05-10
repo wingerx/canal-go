@@ -2,7 +2,7 @@ package parse
 
 import (
 	"github.com/juju/errors"
-	. "github.com/woqutech/drt/events"
+	. "github.com/wingerx/drt/events"
 )
 
 type LogDecoder struct {

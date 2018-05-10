@@ -3,9 +3,9 @@ package parse
 import (
 	"testing"
 	"github.com/golang/glog"
-	"github.com/woqutech/drt/events"
+	"github.com/wingerx/drt/events"
 	"github.com/juju/errors"
-	"github.com/woqutech/drt/protoc"
+	"github.com/wingerx/drt/protoc"
 	"github.com/gogo/protobuf/proto"
 )
 

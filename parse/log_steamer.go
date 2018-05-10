@@ -3,7 +3,7 @@ package parse
 import (
 	"fmt"
 	"github.com/golang/glog"
-	. "github.com/woqutech/drt/tools"
+	. "github.com/wingerx/drt/tools"
 	"sync"
 	"time"
 )

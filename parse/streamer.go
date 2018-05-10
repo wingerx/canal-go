@@ -3,7 +3,7 @@ package parse
 import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	. "github.com/woqutech/drt/events"
+	. "github.com/wingerx/drt/events"
 )
 
 type Streamer struct {

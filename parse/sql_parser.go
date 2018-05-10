@@ -4,7 +4,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/knocknote/vitess-sqlparser/tidbparser/ast"
 	"github.com/knocknote/vitess-sqlparser/tidbparser/parser"
-	. "github.com/woqutech/drt/protoc"
+	. "github.com/wingerx/drt/protoc"
 )
 
 type DdlParserResult struct {
