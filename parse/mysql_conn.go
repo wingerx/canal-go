@@ -125,7 +125,7 @@ func (mc *MySQLConnection) updateSettings() {
 }
 
 // https://dev.mysql.com/doc/internals/en/binlog-formats.html
-func (mc *MySQLConnection) checkBinlogFormat() error {
+func (mc *MySQLConnection) checkBinlogFormat(binlogFormat binlogFormatImage) error {
 	if bgFmt, err := mc.loadBinlogFmtImage("show variables like 'binlog_format'"); err != nil {
 		return err
 	} else if !binlogFormat.contains(bgFmt) {
@@ -135,11 +135,11 @@ func (mc *MySQLConnection) checkBinlogFormat() error {
 }
 
 // https://dev.mysql.com/doc/internals/en/binlog-row-image.html
-func (mc *MySQLConnection) checkBinlogImage() error {
+func (mc *MySQLConnection) checkBinlogImage(binlogImage binlogFormatImage) error {
 	if bgImg, err := mc.loadBinlogFmtImage("show variables like 'binlog_row_image'"); err != nil {
 		return err
 	} else if !binlogImage.contains(bgImg) {
-		return errors.Errorf("unexpected binlog row image result:%v", bgImg)
+		return errors.Errorf("unexpected binlog image result:%v", bgImg)
 	}
 	return nil
 }
@@ -150,6 +150,9 @@ func (mc *MySQLConnection) loadBinlogFmtImage(query string) (string, error) {
 	} else {
 		return ret.GetString(0, 1)
 	}
+}
+func (mc *MySQLConnection) Fork() *MySQLConnection {
+	return fork(mc.auth, mc.slaveId)
 }
 
 func fork(auth *AuthenticInfo, slaveId uint32) *MySQLConnection {

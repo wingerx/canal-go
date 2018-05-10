@@ -20,8 +20,8 @@ func (bfi binlogFormatImage) contains(p string) bool {
 	return false
 }
 
-var binlogFormat = binlogFormatImage{"STATEMENT", "ROW", "MIXED"}
-var binlogImage = binlogFormatImage{"FULL", "MINIMAL", "NOBLOB"}
+//var binlogFormat = binlogFormatImage{"STATEMENT", "ROW", "MIXED"}
+//var binlogImage = binlogFormatImage{"FULL", "MINIMAL", "NOBLOB"}
 
 // Master heartbeat interval
 const MASTER_HEARTBEAT_PERIOD_SECONDS = 15

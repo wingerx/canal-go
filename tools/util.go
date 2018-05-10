@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"unsafe"
+	"net"
 )
 
 // https://dev.mysql.com/doc/internals/en/integer.html#packet-Protocol::LengthEncodedInteger
@@ -417,6 +418,22 @@ func parseDecimalDecompressValue(compIndx int, data []byte, mask uint8) (size in
 	}
 	value = uint32(ReadBigEndianFixedLengthInteger(buff))
 	return
+}
+
+func LocalIPv4s() ([]string, error) {
+	var ips []string
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ips, err
+	}
+
+	for _, a := range addrs {
+		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
+			ips = append(ips, ipnet.IP.String())
+		}
+	}
+
+	return ips, nil
 }
 
 // Logger is used to log critical error messages.

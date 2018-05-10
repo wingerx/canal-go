@@ -223,10 +223,9 @@ func (ec *EventConvert) parseRowsEvent(evtHead *EventHeader, re *RowsEvent) (*En
 
 func (ec *EventConvert) parseOneRow(rowData *RowData, oneRow []interface{}, re *RowsEvent, evtHead *EventHeader, tblMeta *TableMeta, isAfter bool) error {
 	tblEvt := re.Table
-	//columnMeta := tblEvt.ColumnMetadata
 	if tblMeta != nil && len(tblEvt.ColumnTypes) > len(tblMeta.Columns) {
 		pos := ec.createPosition(evtHead)
-		tm := ec.tableMetaCache.GetOneTableMetaViaTSDB(string(tblEvt.DatabaseName), string(tblEvt.TableName), pos)
+		tm := ec.tableMetaCache.GetOneTableMetaViaTSDB(string(tblEvt.DatabaseName), string(tblEvt.TableName), pos, false)
 		if tm == nil {
 			return errors.New(fmt.Sprintf("not found table %s.%s in database", string(tblEvt.DatabaseName), string(tblEvt.TableName)))
 		}

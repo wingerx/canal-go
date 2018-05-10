@@ -98,12 +98,15 @@ func (tmc *TableMetaCache) GetOneTableMeta(schema string, table string) *TableMe
 	return tmc.cache.tableMetas[fmt.Sprintf("%s.%s", schema, table)]
 }
 
-func (tmc *TableMetaCache) GetOneTableMetaViaTSDB(schema, table string, position *protoc.EntryPosition) *TableMeta {
+func (tmc *TableMetaCache) GetOneTableMetaViaTSDB(schema, table string, position *protoc.EntryPosition, useCache bool) *TableMeta {
 	// cache -> tsdb -> 目标db
-	tm := tmc.GetOneTableMeta(schema, table)
+	var tm *TableMeta
+	if useCache {
+		tm = tmc.GetOneTableMeta(schema, table)
+	}
+
 	if tm == nil {
 		// TODO 通过 position 从 TSDB 数据库中获取
-
 		// 从目标端中重新获取
 		tmc.RestoreOneTableMeta(schema, table)
 		tm = tmc.GetOneTableMeta(schema, table)
