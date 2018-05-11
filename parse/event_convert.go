@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 	"github.com/shopspring/decimal"
+	"github.com/wingerx/drt/parse/tsdb"
+	"encoding/json"
 )
 
 var IgnoreEventErr = errors.New("ignore event")
@@ -422,6 +424,36 @@ func isUpdated(bfCols []*Column, newValue interface{}, index int) bool {
 			} else if newValue != nil && !v.IsNull && newValue.(string) == v.Value {
 				return false
 			}
+		}
+	}
+	return true
+}
+
+func (ec *EventConvert) processFilter(query string, evtHead *EventHeader, result *DdlParserResult) bool {
+	if ec.tableMetaCache != nil && (result.eventType == EventType_ALTER || result.eventType == EventType_DROP || result.eventType == EventType_RENAME || result.eventType == EventType_CREATE) {
+		tmc := ec.tableMetaCache
+		tmc.RestoreOneTableMeta(result.schemaName, result.oriTableName)
+
+		tm := tmc.GetOneTableMeta(result.schemaName, result.oriTableName)
+		if tm != nil {
+			position := ec.createPosition(evtHead)
+
+			tableMetaValue, err := json.Marshal(tm)
+			if err != nil {
+				glog.Errorf("sql [%s] parse error: %v", query, errors.Trace(err))
+				return false
+			}
+			meta := new(tsdb.MetaHistory)
+			meta.DdlType = result.eventType.String()
+			meta.SqlText = query
+			meta.TableMetaValue = string(tableMetaValue)
+			meta.Destination = tmc.destination
+			meta.LogfileName = position.LogfileName
+			meta.LogPosition = position.LogPosition
+			meta.ExecuteTime = position.Timestamp
+			meta.ServerId = strconv.FormatInt(position.ServerId, 10)
+			// 插入数据库
+			tsdb.InsertTableMeta(meta)
 		}
 	}
 	return true

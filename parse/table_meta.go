@@ -8,6 +8,8 @@ import (
 	"sync"
 	"encoding/json"
 	"github.com/wingerx/drt/protoc"
+	"github.com/wingerx/drt/parse/tsdb"
+	"strconv"
 )
 
 const (
@@ -80,11 +82,9 @@ func (tmc *TableMetaCache) RemoveOneTableMeta(schema string, table string) {
 
 func (tmc *TableMetaCache) RestoreOneTableMeta(schema string, table string) error {
 	if len(table) > 0 {
-		exist, err := tmc.checkTableExistViaDB(schema, table)
-		if err != nil {
+		if exist, err := tmc.checkTableExistViaDB(schema, table); err != nil {
 			return err
-		}
-		if exist {
+		} else if exist {
 			return tmc.restoreOneTableMeta(schema, table)
 		}
 		return nil
@@ -106,10 +106,37 @@ func (tmc *TableMetaCache) GetOneTableMetaViaTSDB(schema, table string, position
 	}
 
 	if tm == nil {
-		// TODO 通过 position 从 TSDB 数据库中获取
-		// 从目标端中重新获取
-		tmc.RestoreOneTableMeta(schema, table)
-		tm = tmc.GetOneTableMeta(schema, table)
+		// 通过 position 从 TSDB 数据库中获取
+		mh, err := tsdb.SelectTableMeta(tmc.destination, position)
+		if err == nil {
+			json.Unmarshal([]byte(mh.TableMetaValue), tm)
+		}
+		if tm == nil {
+			// 从目标端中重新获取
+			err = tmc.RestoreOneTableMeta(schema, table)
+			if err != nil {
+				glog.Error(errors.Trace(err))
+			}
+			tm = tmc.GetOneTableMeta(schema, table)
+			// 写入到tsdb
+			if tm != nil {
+				tableMetaValue, err := json.Marshal(tm)
+				if err != nil {
+					glog.Error(errors.Trace(err))
+					return nil
+				}
+				meta := new(tsdb.MetaHistory)
+				meta.DdlType = "INIT"
+				meta.TableMetaValue = string(tableMetaValue)
+				meta.Destination = tmc.destination
+				meta.LogfileName = position.LogfileName
+				meta.LogPosition = position.LogPosition
+				meta.ExecuteTime = position.Timestamp
+				meta.ServerId = strconv.FormatInt(position.ServerId, 10)
+				// 插入数据库
+				tsdb.InsertTableMeta(meta)
+			}
+		}
 	}
 	return tm
 }
@@ -126,8 +153,10 @@ func (tmc *TableMetaCache) checkTableExistViaDB(schema string, name string) (boo
 
 func (tmc *TableMetaCache) restoreOneTableMeta(schema string, table string) error {
 	cols, err := tmc.fetchTableColumnsViaDB(schema, table)
+	if err != nil {
+		return err
+	}
 	idx, err := tmc.fetchTableIndexesViaDB(schema, table)
-
 	if err != nil {
 		return err
 	}

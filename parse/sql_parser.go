@@ -46,8 +46,11 @@ func (dsp *DdlSQLParser) Parse(dbName string) ([]*DdlParserResult, error) {
 			sqlResult.eventType = EventType_CREATE
 			sqlResult.schemaName = node.Table.Schema.String()
 			sqlResult.tableName = node.Table.Name.String()
+			sqlResult.oriSchemaName = node.Table.Schema.String()
+			sqlResult.oriTableName = node.Table.Name.String()
 			if len(sqlResult.schemaName) <= 0 {
 				sqlResult.schemaName = dbName
+				sqlResult.oriSchemaName = dbName
 			}
 			ddlResults = append(ddlResults, sqlResult)
 		case *ast.AlterTableStmt:
@@ -89,9 +92,13 @@ func (dsp *DdlSQLParser) Parse(dbName string) ([]*DdlParserResult, error) {
 						sqlResult := new(DdlParserResult)
 						sqlResult.eventType = EventType_ALTER
 						sqlResult.schemaName = node.Table.Schema.String()
+						sqlResult.oriSchemaName = node.Table.Schema.String()
 						sqlResult.tableName = node.Table.Name.String()
+						sqlResult.oriTableName = node.Table.Name.String()
+
 						if len(sqlResult.schemaName) <= 0 {
 							sqlResult.schemaName = dbName
+							sqlResult.oriSchemaName = dbName
 						}
 						ddlResults = append(ddlResults, sqlResult)
 					}
@@ -102,9 +109,12 @@ func (dsp *DdlSQLParser) Parse(dbName string) ([]*DdlParserResult, error) {
 				sqlResult := new(DdlParserResult)
 				sqlResult.eventType = EventType_DROP
 				sqlResult.schemaName = t.Schema.String()
+				sqlResult.oriSchemaName = t.Schema.String()
 				sqlResult.tableName = t.Name.String()
+				sqlResult.oriTableName = t.Name.String()
 				if len(sqlResult.schemaName) <= 0 {
 					sqlResult.schemaName = dbName
+					sqlResult.oriSchemaName = dbName
 				}
 				ddlResults = append(ddlResults, sqlResult)
 			}
@@ -130,9 +140,12 @@ func (dsp *DdlSQLParser) Parse(dbName string) ([]*DdlParserResult, error) {
 			sqlResult := new(DdlParserResult)
 			sqlResult.eventType = EventType_TRUNCATE
 			sqlResult.schemaName = node.Table.Schema.String()
+			sqlResult.oriSchemaName = node.Table.Schema.String()
 			sqlResult.tableName = node.Table.Name.String()
+			sqlResult.oriTableName = node.Table.Name.String()
 			if len(sqlResult.schemaName) <= 0 {
 				sqlResult.schemaName = dbName
+				sqlResult.oriSchemaName = dbName
 			}
 			ddlResults = append(ddlResults, sqlResult)
 		case *ast.RenameTableStmt:
