@@ -48,7 +48,7 @@ func (mp *MySQLEventParser) PrepareDump() error {
 	}
 	// init tableMetaCache
 	var err error
-	mp.tableMetaCache, err = NewTableMetaCache(metaConn)
+	mp.tableMetaCache, err = NewTableMetaCache(metaConn, mp.destination)
 	if err != nil {
 		return err
 	}

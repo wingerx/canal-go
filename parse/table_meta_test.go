@@ -17,13 +17,17 @@ func TestNewTableMetaCache(t *testing.T) {
 	auth.readTimeout = 10
 
 	mc := NewMySQLConnection(auth, 123456)
-	err := mc.Connect()
-	if err != nil {
+	if err := mc.Connect(); err != nil {
+		glog.Error(errors.Trace(err))
+		return
+	}
+	metaConn := NewMySQLConnection(auth, 1234567)
+	if err := metaConn.Connect(); err != nil {
 		glog.Error(errors.Trace(err))
 		return
 	}
 
-	tmc, err := NewTableMetaCache(mc)
+	tmc, err := NewTableMetaCache(metaConn, "example")
 	if err != nil {
 		glog.Error(errors.Trace(err))
 		return

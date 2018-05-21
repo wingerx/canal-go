@@ -7,9 +7,12 @@ import (
 	"github.com/juju/errors"
 	"github.com/wingerx/drt/protoc"
 	"github.com/gogo/protobuf/proto"
+	"github.com/wingerx/drt/parse/tsdb"
 )
 
 func TestNewEventCovert(t *testing.T) {
+	initConn()
+
 	auth := new(AuthenticInfo)
 	auth.host = "127.0.0.1"
 	auth.port = 3306
@@ -24,7 +27,17 @@ func TestNewEventCovert(t *testing.T) {
 		glog.Error(err)
 		return
 	}
-	tblCache, err := NewTableMetaCache(mc)
+	defer mc.Disconnect()
+
+	metaConn := NewMySQLConnection(auth, 1234567)
+	if err := metaConn.Connect(); err != nil {
+		glog.Error(errors.Trace(err))
+		return
+	}
+
+	defer metaConn.Disconnect()
+
+	tblCache, err := NewTableMetaCache(metaConn, "example")
 	if err != nil {
 		glog.Error(err)
 		return
@@ -58,10 +71,20 @@ func TestNewEventCovert(t *testing.T) {
 		return true
 	}
 
-	err = mc.Dump("mysql-bin.000017", 194, sinkFunc)
+	err = mc.Dump("mysql-bin.000001", 154, sinkFunc)
 	if err != nil {
 		glog.Error(err)
 		return
 	}
+}
 
+func initConn() {
+	config := new(tsdb.MysqlConfig)
+	config.Address = "127.0.0.1"
+	config.Port = "4306"
+	config.Username = "root"
+	config.Password = "123456"
+
+	tsdb.NewOnceConn(config)
+	tsdb.InitTableMeta()
 }

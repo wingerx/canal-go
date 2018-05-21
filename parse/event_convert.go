@@ -120,13 +120,17 @@ func (ec *EventConvert) parseQueryEvent(evtHead *EventHeader, qe *QueryEvent) (*
 			return nil, err
 		}
 		// TODO ADD dbName.tblName 过滤
+		for _, ddl := range ddlResults {
+			ec.applyDDLQuery(string(qe.Query), evtHead, ddl)
+		}
 
-		// 针对多行 ddl，只处理第一条
+		// 针对多行 ddl，只记录第一条
 		if len(ddlResults) > 0 {
 			eventType = ddlResults[0].eventType
 			tblName = ddlResults[0].tableName
 			dbName = ddlResults[0].schemaName
 		}
+
 		h := ec.createHeader(evtHead, dbName, tblName, eventType)
 		rc := new(RowChange)
 		if eventType != EventType_QUERY {
@@ -158,7 +162,6 @@ func (ec *EventConvert) parseRowsEvent(evtHead *EventHeader, re *RowsEvent) (*En
 	ec.databaseName = string(re.Table.DatabaseName)
 	ec.tableName = string(re.Table.TableName)
 	fullName := fmt.Sprintf("%v.%v", ec.databaseName, ec.tableName)
-
 	var eventType EventType
 	switch evtHead.Type {
 	case WRITE_ROWS_EVENT_V1, WRITE_ROWS_EVENT_V2:
@@ -190,11 +193,13 @@ func (ec *EventConvert) parseRowsEvent(evtHead *EventHeader, re *RowsEvent) (*En
 		case EventType_INSERT:
 			// insert 处理after 字段
 			if err := ec.parseOneRow(rd, re.Rows[i], re, evtHead, tblMeta, true); err != nil {
+				glog.Error(err)
 				tblErr = true
 			}
 		case EventType_UPDATE:
 			// update 处理before 字段
 			if err := ec.parseOneRow(rd, re.Rows[i], re, evtHead, tblMeta, false); err != nil {
+				glog.Error(err)
 				tblErr = true
 			}
 			// update 处理after 字段
@@ -205,11 +210,13 @@ func (ec *EventConvert) parseRowsEvent(evtHead *EventHeader, re *RowsEvent) (*En
 			}
 			changeRow := re.Rows[i]
 			if err := ec.parseOneRow(rd, changeRow, re, evtHead, tblMeta, true); err != nil {
+				glog.Error(err)
 				tblErr = true
 			}
 		case EventType_DELETE:
 			// delete 处理before 字段
 			if err := ec.parseOneRow(rd, re.Rows[i], re, evtHead, tblMeta, false); err != nil {
+				glog.Error(err)
 				tblErr = true
 			}
 		}
@@ -226,6 +233,7 @@ func (ec *EventConvert) parseRowsEvent(evtHead *EventHeader, re *RowsEvent) (*En
 func (ec *EventConvert) parseOneRow(rowData *RowData, oneRow []interface{}, re *RowsEvent, evtHead *EventHeader, tblMeta *TableMeta, isAfter bool) error {
 	tblEvt := re.Table
 	if tblMeta != nil && len(tblEvt.ColumnTypes) > len(tblMeta.Columns) {
+		errLog.Print(fmt.Sprintf("column size is not match for table: %s.%s, %d vs %d", string(tblEvt.DatabaseName), string(tblEvt.TableName), len(tblEvt.ColumnTypes), len(tblMeta.Columns)))
 		pos := ec.createPosition(evtHead)
 		tm := ec.tableMetaCache.GetOneTableMetaViaTSDB(string(tblEvt.DatabaseName), string(tblEvt.TableName), pos, false)
 		if tm == nil {
@@ -258,36 +266,39 @@ func (ec *EventConvert) parseOneRow(rowData *RowData, oneRow []interface{}, re *
 				column.IsNull = true
 				column.Value = ""
 			case MYSQL_TYPE_TINY:
-				// unsigned 类型处理
-				if tblCol != nil && tblCol.IsUnsigned {
-					column.Value = strconv.FormatUint(uint64(val.(uint8)), 10)
-				} else {
-					column.Value = strconv.FormatInt(int64(val.(int8)), 10)
+				switch v := val.(type) {
+				case uint8:
+					column.Value = strconv.FormatUint(uint64(v), 10)
+				case int8:
+					column.Value = strconv.FormatInt(int64(v), 10)
 				}
 			case MYSQL_TYPE_SHORT:
-				if tblCol != nil && tblCol.IsUnsigned {
-					column.Value = strconv.FormatUint(uint64(val.(uint16)), 10)
-				} else {
-					column.Value = strconv.FormatInt(int64(val.(int16)), 10)
+				switch v := val.(type) {
+				case uint16:
+					column.Value = strconv.FormatUint(uint64(v), 10)
+				case int16:
+					column.Value = strconv.FormatInt(int64(v), 10)
 				}
 			case MYSQL_TYPE_INT24, MYSQL_TYPE_LONG:
-				if tblCol != nil && tblCol.IsUnsigned {
-					column.Value = strconv.FormatUint(uint64(val.(uint32)), 10)
-				} else {
-					column.Value = strconv.FormatInt(int64(val.(int32)), 10)
+				switch v := val.(type) {
+				case uint32:
+					column.Value = strconv.FormatUint(uint64(v), 10)
+				case int32:
+					column.Value = strconv.FormatInt(int64(v), 10)
 				}
 			case MYSQL_TYPE_LONGLONG:
-				if tblCol != nil && tblCol.IsUnsigned {
-					column.Value = strconv.FormatUint(val.(uint64), 10)
-				} else {
-					column.Value = strconv.FormatInt(val.(int64), 10)
+				switch v := val.(type) {
+				case uint64:
+					column.Value = strconv.FormatUint(v, 10)
+				case int64:
+					column.Value = strconv.FormatInt(v, 10)
 				}
 			case MYSQL_TYPE_NEWDECIMAL:
-				switch val.(type) {
+				switch v := val.(type) {
 				case decimal.Decimal:
-					column.Value = val.(decimal.Decimal).String()
+					column.Value = v.String()
 				case float64:
-					column.Value = strconv.FormatFloat(val.(float64), 'E', -1, 64)
+					column.Value = strconv.FormatFloat(v, 'E', -1, 64)
 				}
 			case MYSQL_TYPE_FLOAT:
 				column.Value = strconv.FormatFloat(float64(val.(float32)), 'E', -1, 64)
@@ -346,6 +357,7 @@ func (ec *EventConvert) parseRowsQueryEvent(evtHead *EventHeader, rqe *RowsQuery
 			tblName = ddlResults[0].tableName
 		}
 	}
+
 	return ec.createQueryEntry(sql, evtHead, tblName), nil
 }
 
@@ -429,19 +441,52 @@ func isUpdated(bfCols []*Column, newValue interface{}, index int) bool {
 	return true
 }
 
-func (ec *EventConvert) processFilter(query string, evtHead *EventHeader, result *DdlParserResult) bool {
+func (ec *EventConvert) applyDDLQuery(query string, evtHead *EventHeader, result *DdlParserResult) {
 	if ec.tableMetaCache != nil && (result.eventType == EventType_ALTER || result.eventType == EventType_DROP || result.eventType == EventType_RENAME || result.eventType == EventType_CREATE) {
 		tmc := ec.tableMetaCache
-		tmc.RestoreOneTableMeta(result.schemaName, result.oriTableName)
-
 		tm := tmc.GetOneTableMeta(result.schemaName, result.oriTableName)
+
+		// 将当前的表结构信息存入
+		if tm != nil {
+			position := ec.createPosition(evtHead)
+			_, err := tsdb.SelectLatestTableMeta(tmc.destination, result.schemaName, result.oriTableName, position.Timestamp)
+			if err != nil {
+				tableMetaValue, err := json.Marshal(tm)
+				if err != nil {
+					glog.Errorf("sql [%s] parse error: %v", query, errors.Trace(err))
+					return
+				}
+				meta := new(tsdb.MetaHistory)
+				meta.DdlType = "INIT"
+				meta.SqlText = query
+				meta.TableMetaValue = string(tableMetaValue)
+				meta.Destination = tmc.destination
+				meta.LogfileName = "0"
+				meta.LogPosition = 0
+				meta.ExecuteTime = 0
+				meta.SchemaName = result.schemaName
+				meta.TableName = result.oriTableName
+				meta.ServerId = strconv.FormatInt(position.ServerId, 10)
+				// 插入数据库
+				tsdb.InsertTableMeta(meta)
+			}
+		}
+
+		tblName := result.oriTableName
+		if result.eventType == EventType_RENAME {
+			tblName = result.tableName
+		}
+		// 重新获取变更后的表结构信息
+		tmc.RestoreOneTableMeta(result.schemaName, tblName)
+		tm = tmc.GetOneTableMeta(result.schemaName, tblName)
+		// 发生ddl 操作，将变化后的表结构信息持久化 tsdb
 		if tm != nil {
 			position := ec.createPosition(evtHead)
 
 			tableMetaValue, err := json.Marshal(tm)
 			if err != nil {
 				glog.Errorf("sql [%s] parse error: %v", query, errors.Trace(err))
-				return false
+				return
 			}
 			meta := new(tsdb.MetaHistory)
 			meta.DdlType = result.eventType.String()
@@ -451,10 +496,11 @@ func (ec *EventConvert) processFilter(query string, evtHead *EventHeader, result
 			meta.LogfileName = position.LogfileName
 			meta.LogPosition = position.LogPosition
 			meta.ExecuteTime = position.Timestamp
+			meta.SchemaName = result.schemaName
+			meta.TableName = result.oriTableName
 			meta.ServerId = strconv.FormatInt(position.ServerId, 10)
 			// 插入数据库
 			tsdb.InsertTableMeta(meta)
 		}
 	}
-	return true
 }

@@ -26,24 +26,18 @@ const (
 	TYPE_JSON                 // json
 )
 
-//type TableMetaTSDB interface {
-//	Init(destination string) bool
-//	Find(schema string, table string) (*TableMeta, error)
-//	Apply(position protoc.EntryPosition, schema string, table string) bool
-//	Rollback(position protoc.EntryPosition) bool
-//}
-
 type TableMetaCache struct {
 	conn        *MySQLConnection
 	destination string
 
-	lock  sync.RWMutex
+	lock  sync.Mutex
 	cache *MemoryTableMeta
 }
 
-func NewTableMetaCache(conn *MySQLConnection) (*TableMetaCache, error) {
+func NewTableMetaCache(conn *MySQLConnection, destination string) (*TableMetaCache, error) {
 	tmc := new(TableMetaCache)
 	tmc.conn = conn
+	tmc.destination = destination
 	if err := tmc.initAllTableMetaViaDB(); err != nil {
 		return nil, err
 	}
@@ -93,49 +87,60 @@ func (tmc *TableMetaCache) RestoreOneTableMeta(schema string, table string) erro
 }
 
 func (tmc *TableMetaCache) GetOneTableMeta(schema string, table string) *TableMeta {
-	tmc.lock.RLock()
-	defer tmc.lock.RUnlock()
+	tmc.lock.Lock()
+	defer tmc.lock.Unlock()
 	return tmc.cache.tableMetas[fmt.Sprintf("%s.%s", schema, table)]
 }
 
 func (tmc *TableMetaCache) GetOneTableMetaViaTSDB(schema, table string, position *protoc.EntryPosition, useCache bool) *TableMeta {
-	// cache -> tsdb -> 目标db
+	// cache -> tsdb -> 源库
 	var tm *TableMeta
 	if useCache {
 		tm = tmc.GetOneTableMeta(schema, table)
 	}
 
 	if tm == nil {
-		// 通过 position 从 TSDB 数据库中获取
-		mh, err := tsdb.SelectTableMeta(tmc.destination, position)
-		if err == nil {
-			json.Unmarshal([]byte(mh.TableMetaValue), tm)
+		// 通过 position 从 TSDB 数据库中获取与变更点最近的上一次表结构信息
+		mh, err := tsdb.SelectLatestTableMeta(tmc.destination, schema, table, position.Timestamp)
+		if err == nil && mh != nil {
+			var t TableMeta
+			err = json.Unmarshal([]byte(mh.TableMetaValue), &t)
+			if err != nil {
+				errLog.Print(errors.Trace(err))
+			} else {
+				tm = &t
+			}
 		}
+
 		if tm == nil {
-			// 从目标端中重新获取
+			// 从源端库重新获取
 			err = tmc.RestoreOneTableMeta(schema, table)
 			if err != nil {
 				glog.Error(errors.Trace(err))
 			}
 			tm = tmc.GetOneTableMeta(schema, table)
-			// 写入到tsdb
-			if tm != nil {
-				tableMetaValue, err := json.Marshal(tm)
-				if err != nil {
-					glog.Error(errors.Trace(err))
-					return nil
+			// 将该表结构持久化到tsdb, 作为新的基准线
+			go func() {
+				if tm != nil {
+					tableMetaValue, err := json.Marshal(tm)
+					if err != nil {
+						glog.Error(errors.Trace(err))
+						return
+					}
+					meta := new(tsdb.MetaHistory)
+					meta.DdlType = "INIT"
+					meta.SchemaName = schema
+					meta.TableName = table
+					meta.TableMetaValue = string(tableMetaValue)
+					meta.Destination = tmc.destination
+					meta.LogfileName = position.LogfileName
+					meta.LogPosition = position.LogPosition
+					meta.ExecuteTime = position.Timestamp
+					meta.ServerId = strconv.FormatInt(position.ServerId, 10)
+					// 插入数据库
+					tsdb.InsertTableMeta(meta)
 				}
-				meta := new(tsdb.MetaHistory)
-				meta.DdlType = "INIT"
-				meta.TableMetaValue = string(tableMetaValue)
-				meta.Destination = tmc.destination
-				meta.LogfileName = position.LogfileName
-				meta.LogPosition = position.LogPosition
-				meta.ExecuteTime = position.Timestamp
-				meta.ServerId = strconv.FormatInt(position.ServerId, 10)
-				// 插入数据库
-				tsdb.InsertTableMeta(meta)
-			}
+			}()
 		}
 	}
 	return tm
@@ -184,17 +189,6 @@ func (tmc *TableMetaCache) restoreTableMetas(schema string) error {
 	}
 	for _, t := range tables {
 		tmc.restoreOneTableMeta(schema, t)
-	}
-	return nil
-}
-
-func (tmc *TableMetaCache) initAllTableMetaViaJSON(jsonStr string) error {
-	js := []byte(jsonStr)
-	var cache map[string]*TableMeta
-	err := json.Unmarshal(js, &cache)
-	if err != nil {
-		glog.Errorf("unmarshal json failed: %s, json: %s", err.Error(), jsonStr)
-		return err
 	}
 	return nil
 }
@@ -251,7 +245,9 @@ func (tmc *TableMetaCache) initAllTableMetaViaDB() error {
 		}
 	}
 
-	mtm := NewMemoryTableMeta()
+	mtm := &MemoryTableMeta{}
+	mtm.tableMetas = make(map[string]*TableMeta)
+
 	if len(tblMap) > 0 {
 		for fullName, value := range tblMap {
 			names := strings.Split(fullName, ".")
@@ -271,8 +267,8 @@ func (tmc *TableMetaCache) initAllTableMetaViaDB() error {
 	}
 
 	tmc.lock.Lock()
+	defer tmc.lock.Unlock()
 	tmc.cache = mtm
-	tmc.lock.Unlock()
 
 	return nil
 }
@@ -332,12 +328,6 @@ type MemoryTableMeta struct {
 	tableMetas map[string]*TableMeta
 }
 
-func NewMemoryTableMeta() *MemoryTableMeta {
-	return &MemoryTableMeta{
-		tableMetas: make(map[string]*TableMeta),
-	}
-}
-
 func (mt *MemoryTableMeta) findTableMeta(schema string, table string) (*TableMeta, error) {
 	fullName := fmt.Sprintf("%s.%s", schema, table)
 	if tm, ok := mt.tableMetas[fullName]; ok {
@@ -374,6 +364,10 @@ func (mt *MemoryTableMeta) addTableMetaIndex(schema string, table string, index 
 	}
 	fullName := fmt.Sprintf("%s.%s", schema, table)
 	mt.tableMetas[fullName] = tm
+}
+
+func (mt *MemoryTableMeta) size() int {
+	return len(mt.tableMetas)
 }
 
 type RawTableColumn struct {
@@ -519,5 +513,13 @@ func (tbl *TableMeta) isPKColumn(colName string) bool {
 }
 
 type TableMetaTSDB struct {
-	Destination string
+	destination string
+
+	lock  sync.RWMutex
+	cache *MemoryTableMeta
+}
+
+func (tmTSDB *TableMetaTSDB) initAllTableMetaViaTSDB(destination string) error {
+	tmTSDB.destination = destination
+	return nil
 }
